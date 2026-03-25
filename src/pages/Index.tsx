@@ -1,37 +1,36 @@
 import { useState, useMemo } from "react";
-import { CarInput, Currency, calculateResults, createDefaultCar } from "@/lib/car-types";
+import { CarInput, Currency, calculateResults, createEmptyCar } from "@/lib/car-types";
 import { CarCard } from "@/components/CarCard";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { Plus } from "lucide-react";
 
-let nextId = 3;
+let nextId = 2;
 
 const Index = () => {
-  const [cars, setCars] = useState<CarInput[]>([
-    createDefaultCar("1", 0),
-    createDefaultCar("2", 1),
-  ]);
+  const [cars, setCars] = useState<CarInput[]>([createEmptyCar("1")]);
   const [currency, setCurrency] = useState<Currency>("SEK");
 
-  const results = useMemo(() => cars.map(calculateResults), [cars]);
+  const configuredCars = cars.filter((c) => c.isConfigured);
+  const results = useMemo(() => configuredCars.map(calculateResults), [configuredCars]);
 
   const updateCar = (id: string, updated: CarInput) => {
     setCars((prev) => prev.map((c) => (c.id === id ? updated : c)));
   };
 
   const removeCar = (id: string) => {
-    setCars((prev) => prev.filter((c) => c.id !== id));
+    setCars((prev) => {
+      const filtered = prev.filter((c) => c.id !== id);
+      return filtered.length === 0 ? [createEmptyCar(String(nextId++))] : filtered;
+    });
   };
 
   const addCar = () => {
     if (cars.length >= 3) return;
-    const id = String(nextId++);
-    setCars((prev) => [...prev, createDefaultCar(id, prev.length)]);
+    setCars((prev) => [...prev, createEmptyCar(String(nextId++))]);
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border/60 bg-surface-raised/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -47,10 +46,8 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid lg:grid-cols-[1fr_400px] gap-8">
-          {/* Input section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">Your cars</h1>
@@ -79,9 +76,16 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Results section */}
           <div className="lg:sticky lg:top-24 lg:self-start">
-            <ResultsPanel results={results} currency={currency} />
+            {results.length > 0 ? (
+              <ResultsPanel results={results} currency={currency} />
+            ) : (
+              <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Select a car to see cost breakdown
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </main>
