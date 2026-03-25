@@ -47,7 +47,7 @@ const Index = () => {
         <img
           src="/logo.png"
           alt="Carculator logo"
-          className="h-10 w-10 object-contain"
+          className="h-14 w-auto object-contain"
         />
 
         <div className="flex items-baseline gap-2">
