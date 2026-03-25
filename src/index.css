@@ -64,13 +64,10 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-.goog-te-banner-frame {
-  display: none !important;
-}
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-    top: 0px !important;
 
   }
 }
