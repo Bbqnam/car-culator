@@ -1,9 +1,15 @@
 import { CarResult, Currency, formatCurrency } from "@/lib/car-types";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface ResultsPanelProps {
   results: CarResult[];
   currency: Currency;
 }
+
+const CHART_COLORS = {
+  cheapest: "hsl(152, 45%, 48%)",
+  normal: "hsl(220, 8%, 75%)",
+};
 
 export function ResultsPanel({ results, currency }: ResultsPanelProps) {
   if (results.length === 0) return null;
@@ -11,10 +17,62 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
   const cheapestMonthly = Math.min(...results.map((r) => r.monthlyCost));
   const maxMonthly = Math.max(...results.map((r) => r.monthlyCost));
 
+  const chartData = results.map((r) => ({
+    name: r.name.length > 18 ? r.name.slice(0, 16) + "…" : r.name,
+    fullName: r.name,
+    monthly: r.monthlyCost,
+    isCheapest: r.monthlyCost === cheapestMonthly && results.length > 1,
+  }));
+
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold tracking-tight">Comparison</h2>
 
+      {/* Chart */}
+      {results.length >= 2 && (
+        <div className="rounded-2xl bg-card border border-border/60 p-5">
+          <p className="text-xs text-muted-foreground mb-3">Monthly cost (SEK)</p>
+          <ResponsiveContainer width="100%" height={results.length * 56 + 16}>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={110}
+                tick={{ fontSize: 12, fill: "hsl(220, 8%, 55%)" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                cursor={{ fill: "hsl(220, 10%, 94%, 0.5)" }}
+                contentStyle={{
+                  background: "hsl(0, 0%, 100%)",
+                  border: "1px solid hsl(220, 13%, 90%)",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+                formatter={(value: number) => [
+                  currency === "EUR"
+                    ? `€${Math.round(value * 0.088).toLocaleString("sv-SE")}`
+                    : `${value.toLocaleString("sv-SE")} kr`,
+                  "Monthly",
+                ]}
+              />
+              <Bar dataKey="monthly" radius={[0, 6, 6, 0]} barSize={28}>
+                {chartData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Cards */}
       <div className="grid gap-4">
         {results.map((result) => {
           const isCheapest = result.monthlyCost === cheapestMonthly && results.length > 1;
@@ -48,7 +106,6 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
                 </div>
               </div>
 
-              {/* Cost bar */}
               <div className="h-2 rounded-full bg-secondary overflow-hidden mb-4">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
@@ -58,10 +115,11 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <Stat label="Yearly" value={formatCurrency(result.yearlyCost, currency)} />
                 <Stat label="Total" value={formatCurrency(result.totalOwnershipCost, currency)} />
                 <Stat label="Depreciation" value={formatCurrency(result.totalDepreciation, currency)} />
+                <Stat label="Residual" value={`${result.residualValuePercent}%`} />
               </div>
             </div>
           );
