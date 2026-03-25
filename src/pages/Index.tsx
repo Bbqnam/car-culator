@@ -9,8 +9,17 @@ let nextId = 2;
 const Index = () => {
   const [cars, setCars] = useState<CarInput[]>([createEmptyCar("1")]);
   const [currency, setCurrency] = useState<Currency>("SEK");
-
+  const [language, setLanguage] = useState("en");
   const configuredCars = cars.filter((c) => c.isConfigured);
+  const languageOptions = [
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "sv", label: "Svenska", flag: "🇸🇪" },
+];
+
+const currencyOptions = [
+  { code: "SEK", label: "SEK", symbol: "kr" },
+  { code: "EUR", label: "EUR", symbol: "€" },
+];
   const results = useMemo(
     () =>
       configuredCars.map((c) => ({
@@ -36,7 +45,6 @@ const Index = () => {
     if (cars.length >= 3) return;
     setCars((prev) => [...prev, createEmptyCar(String(nextId++))]);
   };
-
   return (
   <div className="min-h-screen bg-background">
   <header className="border-b border-border/60 bg-surface-raised/80 backdrop-blur-sm sticky top-0 z-10">
@@ -62,12 +70,36 @@ const Index = () => {
       </div>
 
       {/* RIGHT: Currency Toggle */}
-      <button
-        onClick={() => setCurrency((c) => (c === "SEK" ? "EUR" : "SEK"))}
-        className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
-      >
-        {currency}
-      </button>
+      {/* RIGHT: Language + Currency */}
+<div className="flex items-center gap-2">
+
+  {/* Language */}
+  <select
+    value={language}
+    onChange={(e) => setLanguage(e.target.value)}
+    className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+  >
+    {languageOptions.map((opt) => (
+      <option key={opt.code} value={opt.code}>
+        {opt.flag} {opt.label}
+      </option>
+    ))}
+  </select>
+
+  {/* Currency */}
+  <select
+    value={currency}
+    onChange={(e) => setCurrency(e.target.value as Currency)}
+    className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+  >
+    {currencyOptions.map((opt) => (
+      <option key={opt.code} value={opt.code}>
+        {opt.symbol} {opt.label}
+      </option>
+    ))}
+  </select>
+
+</div>
 
     </div>
   </header>
