@@ -52,6 +52,14 @@ export default {
           soft: "hsl(var(--highlight-soft))",
         },
         "surface-raised": "hsl(var(--surface-raised))",
+        fuel: {
+          electric: "hsl(var(--fuel-electric))",
+          "electric-soft": "hsl(var(--fuel-electric-soft))",
+          petrol: "hsl(var(--fuel-petrol))",
+          "petrol-soft": "hsl(var(--fuel-petrol-soft))",
+          diesel: "hsl(var(--fuel-diesel))",
+          "diesel-soft": "hsl(var(--fuel-diesel-soft))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

@@ -50,6 +50,13 @@ All colors MUST be HSL.
     --highlight: 152 45% 48%;
     --highlight-soft: 152 40% 95%;
     --surface-raised: 0 0% 100%;
+
+    --fuel-electric: 152 50% 45%;
+    --fuel-electric-soft: 152 40% 94%;
+    --fuel-petrol: 38 80% 50%;
+    --fuel-petrol-soft: 38 60% 94%;
+    --fuel-diesel: 215 15% 50%;
+    --fuel-diesel-soft: 215 15% 93%;
   }
 }
 
