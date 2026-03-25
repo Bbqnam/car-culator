@@ -54,8 +54,9 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="grid lg:grid-cols-[1fr_400px] gap-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Mobile: stack vertically. Desktop: side-by-side */}
+        <div className="flex flex-col lg:grid lg:grid-cols-[1fr_420px] gap-6 lg:gap-8">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">Your cars</h1>
@@ -70,7 +71,8 @@ const Index = () => {
               )}
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Mobile: single column. Tablet+: 2 cols. Large desktop in sidebar layout: adapt */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
               {cars.map((car, i) => (
                 <CarCard
                   key={car.id}
