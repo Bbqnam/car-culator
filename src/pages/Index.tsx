@@ -42,7 +42,7 @@ const currencyOptions = [
   };
 
   const addCar = () => {
-    if (cars.length >= 4) return;
+    if (cars.length >= 6) return;
     setCars((prev) => [...prev, createEmptyCar(String(nextId++))]);
   };
   return (
@@ -110,7 +110,7 @@ const currencyOptions = [
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold tracking-tight">Your cars</h1>
-              {cars.length < 3 && (
+              {cars.length < 6 && (
                 <button
                   onClick={addCar}
                   className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
