@@ -1,5 +1,5 @@
-import { CarInput, FuelType, getDefaultResidualPercent } from "@/lib/car-types";
-import { getBrands, getModels, findCarModel, getDefaultFuelPrice, CarModel } from "@/lib/car-database";
+import { CarInput, FuelType, calculateResidualPercent } from "@/lib/car-types";
+import { getBrands, getModels, findCarModel, getDefaultFuelPrice } from "@/lib/car-database";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,12 +38,22 @@ function Field({ label, unit, value, onChange, min = 0, step = 1 }: {
   );
 }
 
+function ReadonlyField({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="h-9 flex items-center text-sm text-muted-foreground px-3 rounded-md bg-secondary/30">
+        {value}{unit ? ` ${unit}` : ""}
+      </div>
+    </div>
+  );
+}
+
 export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardProps) {
   const brands = getBrands();
   const models = car.brand ? getModels(car.brand) : [];
 
   const handleBrandChange = (brand: string) => {
-    // Reset model when brand changes
     onChange({
       ...car,
       brand,
@@ -82,6 +92,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
 
   const fuelLabel = car.fuelType === "electric" ? "kWh/100km" : "L/100km";
   const priceLabel = car.fuelType === "electric" ? "SEK/kWh" : "SEK/L";
+  const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
 
   return (
     <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/60 space-y-4 relative group">
@@ -95,7 +106,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
         </button>
       )}
 
-      {/* Brand & Model selectors */}
       <div className="space-y-3">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Car {index + 1}</div>
         <div className="grid grid-cols-2 gap-3">
@@ -132,7 +142,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
         </div>
       </div>
 
-      {/* Empty state */}
       {!car.isConfigured && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mb-3">
@@ -142,13 +151,12 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
         </div>
       )}
 
-      {/* Editable fields (shown after car is configured) */}
       {car.isConfigured && (
         <div className="space-y-3 pt-1">
           <div className="h-px bg-border/60" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Purchase price" unit="SEK" value={car.purchasePrice} onChange={(v) => update({ purchasePrice: v })} step={10000} />
-            <Field label="Ownership" unit="years" value={car.ownershipYears} onChange={(v) => update({ ownershipYears: v, residualValuePercent: getDefaultResidualPercent(v) })} min={1} />
+            <Field label="Ownership" unit="years" value={car.ownershipYears} onChange={(v) => update({ ownershipYears: Math.max(1, v) })} min={1} />
             <Field label="Annual mileage" unit="km" value={car.annualMileage} onChange={(v) => update({ annualMileage: v })} step={1000} />
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Fuel type</Label>
@@ -168,7 +176,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
             <Field label="Insurance" unit="SEK/yr" value={car.insuranceCost} onChange={(v) => update({ insuranceCost: v })} step={100} />
             <Field label="Tax" unit="SEK/yr" value={car.taxCost} onChange={(v) => update({ taxCost: v })} step={100} />
             <Field label="Service & maint." unit="SEK/yr" value={car.serviceCost} onChange={(v) => update({ serviceCost: v })} step={100} />
-            <Field label="Residual value" unit="%" value={car.residualValuePercent} onChange={(v) => update({ residualValuePercent: v })} />
+            <ReadonlyField label="Residual value" value={`${residualPercent}%`} />
           </div>
         </div>
       )}

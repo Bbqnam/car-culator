@@ -15,7 +15,6 @@ export interface CarInput {
   insuranceCost: number;
   taxCost: number;
   serviceCost: number;
-  residualValuePercent: number;
   isConfigured: boolean;
 }
 
@@ -27,11 +26,35 @@ export interface CarResult {
   totalOwnershipCost: number;
   monthlyCost: number;
   yearlyCost: number;
+  residualValuePercent: number;
+}
+
+/**
+ * Calculates residual value as a percentage using an exponential decay model.
+ * Cars lose ~20% in year 1, then ~12% per year after that.
+ * Electric cars depreciate slightly faster initially due to tech cycles.
+ */
+export function calculateResidualPercent(years: number, fuelType: FuelType): number {
+  if (years <= 0) return 100;
+
+  // Year 1 drop + compound annual depreciation after that
+  const firstYearRetention = fuelType === "electric" ? 0.75 : 0.80;
+  const annualRetention = fuelType === "electric" ? 0.88 : 0.87;
+
+  if (years <= 1) {
+    // Interpolate within first year
+    return Math.round((1 - (1 - firstYearRetention) * years) * 100);
+  }
+
+  const remainingYears = years - 1;
+  const residual = firstYearRetention * Math.pow(annualRetention, remainingYears);
+  return Math.round(Math.max(residual * 100, 5)); // Floor at 5%
 }
 
 export function calculateResults(car: CarInput): CarResult {
+  const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
   const annualFuelCost = (car.annualMileage / 100) * car.fuelConsumption * car.fuelPrice;
-  const residualValue = car.purchasePrice * (car.residualValuePercent / 100);
+  const residualValue = car.purchasePrice * (residualPercent / 100);
   const totalDepreciation = car.purchasePrice - residualValue;
   const totalOwnershipCost =
     totalDepreciation +
@@ -47,16 +70,8 @@ export function calculateResults(car: CarInput): CarResult {
     totalOwnershipCost: Math.round(totalOwnershipCost),
     monthlyCost: Math.round(monthlyCost),
     yearlyCost: Math.round(yearlyCost),
+    residualValuePercent: residualPercent,
   };
-}
-
-export function getDefaultResidualPercent(years: number): number {
-  if (years <= 1) return 75;
-  if (years <= 2) return 60;
-  if (years <= 3) return 50;
-  if (years <= 5) return 35;
-  if (years <= 7) return 25;
-  return 15;
 }
 
 export function createEmptyCar(id: string): CarInput {
@@ -74,7 +89,6 @@ export function createEmptyCar(id: string): CarInput {
     insuranceCost: 6000,
     taxCost: 0,
     serviceCost: 0,
-    residualValuePercent: 35,
     isConfigured: false,
   };
 }
