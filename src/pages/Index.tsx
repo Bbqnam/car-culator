@@ -12,8 +12,8 @@ const Index = () => {
   const [language, setLanguage] = useState("en");
   const configuredCars = cars.filter((c) => c.isConfigured);
   const languageOptions = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "sv", label: "Svenska", flag: "🇸🇪" },
+  { code: "en", label: "English", flag: "GB" },
+  { code: "sv", label: "Svenska", flag: "SE" },
 ];
 
 const currencyOptions = [
@@ -42,7 +42,7 @@ const currencyOptions = [
   };
 
   const addCar = () => {
-    if (cars.length >= 3) return;
+    if (cars.length >= 4) return;
     setCars((prev) => [...prev, createEmptyCar(String(nextId++))]);
   };
   return (
