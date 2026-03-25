@@ -18,6 +18,14 @@ export interface CarInput {
   isConfigured: boolean;
 }
 
+export interface CostBreakdown {
+  fuel: number;
+  insurance: number;
+  tax: number;
+  service: number;
+  depreciation: number;
+}
+
 export interface CarResult {
   id: string;
   name: string;
@@ -27,28 +35,19 @@ export interface CarResult {
   monthlyCost: number;
   yearlyCost: number;
   residualValuePercent: number;
+  breakdown: CostBreakdown;
 }
 
-/**
- * Calculates residual value as a percentage using an exponential decay model.
- * Cars lose ~20% in year 1, then ~12% per year after that.
- * Electric cars depreciate slightly faster initially due to tech cycles.
- */
 export function calculateResidualPercent(years: number, fuelType: FuelType): number {
   if (years <= 0) return 100;
-
-  // Year 1 drop + compound annual depreciation after that
   const firstYearRetention = fuelType === "electric" ? 0.75 : 0.80;
   const annualRetention = fuelType === "electric" ? 0.88 : 0.87;
-
   if (years <= 1) {
-    // Interpolate within first year
     return Math.round((1 - (1 - firstYearRetention) * years) * 100);
   }
-
   const remainingYears = years - 1;
   const residual = firstYearRetention * Math.pow(annualRetention, remainingYears);
-  return Math.round(Math.max(residual * 100, 5)); // Floor at 5%
+  return Math.round(Math.max(residual * 100, 5));
 }
 
 export function calculateResults(car: CarInput): CarResult {
@@ -56,9 +55,11 @@ export function calculateResults(car: CarInput): CarResult {
   const annualFuelCost = (car.annualMileage / 100) * car.fuelConsumption * car.fuelPrice;
   const residualValue = car.purchasePrice * (residualPercent / 100);
   const totalDepreciation = car.purchasePrice - residualValue;
-  const totalOwnershipCost =
-    totalDepreciation +
-    (annualFuelCost + car.insuranceCost + car.taxCost + car.serviceCost) * car.ownershipYears;
+  const totalFuel = annualFuelCost * car.ownershipYears;
+  const totalInsurance = car.insuranceCost * car.ownershipYears;
+  const totalTax = car.taxCost * car.ownershipYears;
+  const totalService = car.serviceCost * car.ownershipYears;
+  const totalOwnershipCost = totalDepreciation + totalFuel + totalInsurance + totalTax + totalService;
   const monthlyCost = totalOwnershipCost / (car.ownershipYears * 12);
   const yearlyCost = totalOwnershipCost / car.ownershipYears;
 
@@ -71,6 +72,13 @@ export function calculateResults(car: CarInput): CarResult {
     monthlyCost: Math.round(monthlyCost),
     yearlyCost: Math.round(yearlyCost),
     residualValuePercent: residualPercent,
+    breakdown: {
+      fuel: Math.round(totalFuel),
+      insurance: Math.round(totalInsurance),
+      tax: Math.round(totalTax),
+      service: Math.round(totalService),
+      depreciation: Math.round(totalDepreciation),
+    },
   };
 }
 

@@ -103,9 +103,8 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
   const priceLabel = car.fuelType === "electric" ? "SEK/kWh" : "SEK/L";
   const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
 
-  // The current car model from the database (single fuel type per model variant)
   const currentModel = car.brand && car.model ? findCarModel(car.brand, car.model) : null;
-  const hasSingleFuelType = !!currentModel; // each model variant has exactly one fuel type
+  const hasSingleFuelType = !!currentModel;
 
   return (
     <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/60 space-y-4 relative group">
@@ -120,18 +119,21 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
       )}
 
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          {car.brand && <BrandLogo brand={car.brand} />}
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Car {index + 1}
-          </span>
-          {car.isConfigured && <FuelBadge fuelType={car.fuelType} />}
-        </div>
-
-        {car.isConfigured && car.name && (
-          <div className="flex items-center gap-2">
+        {/* Header: show car name after config, otherwise show "Car N" placeholder */}
+        {car.isConfigured && car.name ? (
+          <div className="flex items-center gap-2.5">
             <BrandLogo brand={car.brand} size="md" />
-            <span className="font-semibold text-sm">{car.name}</span>
+            <div className="min-w-0">
+              <span className="font-semibold text-sm block truncate">{car.name}</span>
+              <FuelBadge fuelType={car.fuelType} />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            {car.brand && <BrandLogo brand={car.brand} />}
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Car {index + 1}
+            </span>
           </div>
         )}
 
@@ -191,7 +193,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
             <Field label="Ownership" unit="years" value={car.ownershipYears} onChange={(v) => update({ ownershipYears: Math.max(1, v) })} min={1} />
             <Field label="Annual mileage" unit="km" value={car.annualMileage} onChange={(v) => update({ annualMileage: v })} step={1000} />
 
-            {/* Fuel type: auto-selected from model, shown as readonly badge */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Fuel type</Label>
               {hasSingleFuelType ? (
