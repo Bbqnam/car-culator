@@ -1,8 +1,11 @@
 import { CarResult, Currency, formatCurrency } from "@/lib/car-types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BrandLogo } from "@/components/BrandLogo";
+import { FuelBadge } from "@/components/FuelBadge";
+import { FuelType } from "@/lib/car-types";
 
 interface ResultsPanelProps {
-  results: CarResult[];
+  results: (CarResult & { brand?: string; fuelType?: FuelType })[];
   currency: Currency;
 }
 
@@ -28,10 +31,9 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
     <div className="space-y-6">
       <h2 className="text-lg font-semibold tracking-tight">Comparison</h2>
 
-      {/* Chart */}
       {results.length >= 2 && (
         <div className="rounded-2xl bg-card border border-border/60 p-5">
-          <p className="text-xs text-muted-foreground mb-3">Monthly cost (SEK)</p>
+          <p className="text-xs text-muted-foreground mb-3">Monthly cost</p>
           <ResponsiveContainer width="100%" height={results.length * 56 + 16}>
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
               <XAxis type="number" hide />
@@ -53,9 +55,7 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
                 formatter={(value: number) => [
-                  currency === "EUR"
-                    ? `€${Math.round(value * 0.088).toLocaleString("sv-SE")}`
-                    : `${value.toLocaleString("sv-SE")} kr`,
+                  formatCurrency(value, currency),
                   "Monthly",
                 ]}
               />
@@ -72,7 +72,6 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
         </div>
       )}
 
-      {/* Cards */}
       <div className="grid gap-4">
         {results.map((result) => {
           const isCheapest = result.monthlyCost === cheapestMonthly && results.length > 1;
@@ -90,12 +89,18 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{result.name}</h3>
-                    {isCheapest && (
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-highlight bg-highlight/10 px-2 py-0.5 rounded-full">
-                        Cheapest
-                      </span>
-                    )}
+                    {result.brand && <BrandLogo brand={result.brand} size="md" />}
+                    <div>
+                      <h3 className="font-semibold">{result.name}</h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {result.fuelType && <FuelBadge fuelType={result.fuelType} />}
+                        {isCheapest && (
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-highlight bg-highlight/10 px-2 py-0.5 rounded-full">
+                            Cheapest
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">

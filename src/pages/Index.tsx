@@ -11,7 +11,15 @@ const Index = () => {
   const [currency, setCurrency] = useState<Currency>("SEK");
 
   const configuredCars = cars.filter((c) => c.isConfigured);
-  const results = useMemo(() => configuredCars.map(calculateResults), [configuredCars]);
+  const results = useMemo(
+    () =>
+      configuredCars.map((c) => ({
+        ...calculateResults(c),
+        brand: c.brand,
+        fuelType: c.fuelType,
+      })),
+    [configuredCars]
+  );
 
   const updateCar = (id: string, updated: CarInput) => {
     setCars((prev) => prev.map((c) => (c.id === id ? updated : c)));

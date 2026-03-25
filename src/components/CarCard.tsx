@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, Car } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { FuelBadge } from "@/components/FuelBadge";
 
 interface CarCardProps {
   car: CarInput;
@@ -26,7 +28,7 @@ function Field({ label, unit, value, onChange, min = 0, step = 1 }: {
           onChange={(e) => onChange(Number(e.target.value))}
           min={min}
           step={step}
-          className="h-9 text-sm pr-12 bg-secondary/50 border-0 focus-visible:ring-1"
+          className="h-9 text-sm pr-12 bg-secondary/50 border-0 focus-visible:ring-1 focus-visible:ring-accent/40"
         />
         {unit && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -90,9 +92,20 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
     onChange({ ...car, ...partial });
   };
 
+  const handleFuelTypeChange = (ft: FuelType) => {
+    update({
+      fuelType: ft,
+      fuelPrice: getDefaultFuelPrice(ft),
+    });
+  };
+
   const fuelLabel = car.fuelType === "electric" ? "kWh/100km" : "L/100km";
   const priceLabel = car.fuelType === "electric" ? "SEK/kWh" : "SEK/L";
   const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
+
+  // The current car model from the database (single fuel type per model variant)
+  const currentModel = car.brand && car.model ? findCarModel(car.brand, car.model) : null;
+  const hasSingleFuelType = !!currentModel; // each model variant has exactly one fuel type
 
   return (
     <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/60 space-y-4 relative group">
@@ -107,7 +120,21 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
       )}
 
       <div className="space-y-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Car {index + 1}</div>
+        <div className="flex items-center gap-2">
+          {car.brand && <BrandLogo brand={car.brand} />}
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Car {index + 1}
+          </span>
+          {car.isConfigured && <FuelBadge fuelType={car.fuelType} />}
+        </div>
+
+        {car.isConfigured && car.name && (
+          <div className="flex items-center gap-2">
+            <BrandLogo brand={car.brand} size="md" />
+            <span className="font-semibold text-sm">{car.name}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Brand</Label>
@@ -117,7 +144,12 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               </SelectTrigger>
               <SelectContent>
                 {brands.map((b) => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                  <SelectItem key={b} value={b}>
+                    <span className="flex items-center gap-2">
+                      <BrandLogo brand={b} />
+                      {b}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -158,19 +190,28 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
             <Field label="Purchase price" unit="SEK" value={car.purchasePrice} onChange={(v) => update({ purchasePrice: v })} step={10000} />
             <Field label="Ownership" unit="years" value={car.ownershipYears} onChange={(v) => update({ ownershipYears: Math.max(1, v) })} min={1} />
             <Field label="Annual mileage" unit="km" value={car.annualMileage} onChange={(v) => update({ annualMileage: v })} step={1000} />
+
+            {/* Fuel type: auto-selected from model, shown as readonly badge */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Fuel type</Label>
-              <Select value={car.fuelType} onValueChange={(v: FuelType) => update({ fuelType: v })}>
-                <SelectTrigger className="h-9 text-sm bg-secondary/50 border-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="petrol">Petrol</SelectItem>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="electric">Electric</SelectItem>
-                </SelectContent>
-              </Select>
+              {hasSingleFuelType ? (
+                <div className="h-9 flex items-center px-3 rounded-md bg-secondary/30">
+                  <FuelBadge fuelType={car.fuelType} />
+                </div>
+              ) : (
+                <Select value={car.fuelType} onValueChange={(v: FuelType) => handleFuelTypeChange(v)}>
+                  <SelectTrigger className="h-9 text-sm bg-secondary/50 border-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="petrol">Petrol</SelectItem>
+                    <SelectItem value="diesel">Diesel</SelectItem>
+                    <SelectItem value="electric">Electric</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
             <Field label="Consumption" unit={fuelLabel} value={car.fuelConsumption} onChange={(v) => update({ fuelConsumption: v })} step={0.1} />
             <Field label="Fuel price" unit={priceLabel} value={car.fuelPrice} onChange={(v) => update({ fuelPrice: v })} step={0.1} />
             <Field label="Insurance" unit="SEK/yr" value={car.insuranceCost} onChange={(v) => update({ insuranceCost: v })} step={100} />
