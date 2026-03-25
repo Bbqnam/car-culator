@@ -1,4 +1,4 @@
-import { getBrandColor, getBrandInitials } from "@/lib/brand-logos";
+import { getBrandLogo, getBrandInitials } from "@/lib/brand-logos";
 
 interface BrandLogoProps {
   brand: string;
@@ -6,17 +6,30 @@ interface BrandLogoProps {
 }
 
 export function BrandLogo({ brand, size = "sm" }: BrandLogoProps) {
-  const color = getBrandColor(brand);
+  const logo = getBrandLogo(brand);
+  const dim = size === "md" ? "h-7 w-7" : "h-5 w-5";
+
+  if (logo) {
+    return (
+      <img
+        src={logo}
+        alt={brand}
+        className={`${dim} object-contain shrink-0`}
+        loading="lazy"
+      />
+    );
+  }
+
+  // Fallback: initials in a neutral circle
   const initials = getBrandInitials(brand);
-  const dim = size === "md" ? "w-8 h-8" : "w-5 h-5";
-  const textSize = size === "md" ? "text-[10px]" : "text-[7px]";
+  const fallbackDim = size === "md" ? "w-7 h-7" : "w-5 h-5";
+  const textSize = size === "md" ? "text-[9px]" : "text-[7px]";
 
   return (
     <div
-      className={`${dim} rounded-full flex items-center justify-center shrink-0`}
-      style={{ backgroundColor: color }}
+      className={`${fallbackDim} rounded-full bg-muted flex items-center justify-center shrink-0`}
     >
-      <span className={`${textSize} font-bold text-white leading-none`}>
+      <span className={`${textSize} font-bold text-muted-foreground leading-none`}>
         {initials}
       </span>
     </div>
