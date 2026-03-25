@@ -38,34 +38,39 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/60 bg-surface-raised/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-  <img
-    src="/logo.png"
-    alt="Carculator logo"
-    className="h-8 w-auto object-contain"
-  />
+  <div className="min-h-screen bg-background">
+  <header className="border-b border-border/60 bg-surface-raised/80 backdrop-blur-sm sticky top-0 z-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      
+      {/* LEFT: Logo + Title */}
+      <div className="flex items-center gap-3">
+        <img
+          src="/logo.png"
+          alt="Carculator logo"
+          className="h-8 w-auto object-contain"
+        />
 
-  <div className="flex items-baseline gap-2">
-    <span className="text-lg font-bold tracking-tight">
-      Carculator
-    </span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-lg font-bold tracking-tight">
+            Carculator
+          </span>
 
-    <span className="text-xs text-muted-foreground hidden sm:inline">
-      — Real cost of car ownership
-    </span>
-  </div>
-</div>
-          <button
-            onClick={() => setCurrency((c) => (c === "SEK" ? "EUR" : "SEK"))}
-            className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
-          >
-            {currency}
-          </button>
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            — Real cost of car ownership
+          </span>
         </div>
-      </header>
+      </div>
+
+      {/* RIGHT: Currency Toggle */}
+      <button
+        onClick={() => setCurrency((c) => (c === "SEK" ? "EUR" : "SEK"))}
+        className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+      >
+        {currency}
+      </button>
+
+    </div>
+  </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Mobile: stack vertically. Desktop: side-by-side */}
