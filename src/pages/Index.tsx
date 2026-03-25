@@ -43,7 +43,7 @@ const Index = () => {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
       
       {/* LEFT: Logo + Title */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <img
           src="/logo.png"
           alt="Carculator logo"
