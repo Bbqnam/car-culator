@@ -216,6 +216,8 @@ function MiniStat({
 
 // ─── Breakdown Tab ───────────────────────────────────────────────────────────
 
+type ViewMode = "monthly" | "yearly" | "total";
+
 function BreakdownTab({
   sorted, activeRows, currency,
 }: {
@@ -223,87 +225,190 @@ function BreakdownTab({
   activeRows: typeof BREAKDOWN_ROWS;
   currency: Currency;
 }) {
+  const [viewMode, setViewMode] = useState<ViewMode>("monthly");
   const isMulti = sorted.length > 1;
 
+  // Derive ownership months per car from existing CarResult fields.
+  // totalOwnershipCost / monthlyCost = total months. Safe as long as monthlyCost > 0.
+  function getMonths(r: CarResult): number {
+    return r.monthlyCost > 0 ? Math.round(r.totalOwnershipCost / r.monthlyCost) : 12;
+  }
+  function getYears(r: CarResult): number {
+    return r.yearlyCost > 0 ? Math.round(r.totalOwnershipCost / r.yearlyCost) : 1;
+  }
+
+  // Scale a breakdown value (stored as TOTAL) to the selected view mode.
+  function scale(totalVal: number, r: CarResult): number {
+    if (viewMode === "total") return totalVal;
+    if (viewMode === "yearly") return Math.round(totalVal / Math.max(1, getYears(r)));
+    // monthly
+    return Math.round(totalVal / Math.max(1, getMonths(r)));
+  }
+
+  const VIEW_MODES: { key: ViewMode; label: string }[] = [
+    { key: "monthly", label: "Monthly" },
+    { key: "yearly",  label: "Yearly"  },
+    { key: "total",   label: "Total"   },
+  ];
+
   return (
-    <div className="overflow-x-auto -mx-1">
-      <table className="w-full text-xs min-w-[260px]">
-        <thead>
-          <tr className="border-b border-border/60">
-            <th className="text-left pb-2 pr-3 text-muted-foreground font-medium w-28">
-              Category
-            </th>
-            {sorted.map((r) => (
-              <th key={r.id} className="pb-2 px-2 text-right font-semibold text-foreground">
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className="truncate max-w-[90px] block">{r.name}</span>
-                  <span className="font-normal text-muted-foreground text-[10px]">
-                    {FINANCING_LABELS[r.financingMode]}
-                  </span>
-                </div>
+    <div className="space-y-4">
+
+      {/* ── View-mode toggle ─────────────────────────────────────────────── */}
+      <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
+        {VIEW_MODES.map((m) => {
+          const active = viewMode === m.key;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setViewMode(m.key)}
+              className={[
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 select-none",
+                active
+                  ? "bg-white text-foreground shadow-sm border border-border/40"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/50",
+              ].join(" ")}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Category table ───────────────────────────────────────────────── */}
+      <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-xs min-w-[260px]">
+          <thead>
+            <tr className="border-b border-border/60">
+              <th className="text-left pb-2 pr-3 text-muted-foreground font-medium w-28">
+                Category
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {activeRows.map((row) => {
-            const values = sorted.map((r) => (r.breakdown as any)[row.key] as number);
-            const minVal = Math.min(...values.filter((v) => v > 0));
-            return (
-              <tr key={row.key} className="border-b border-border/40 last:border-0">
-                <td className="py-2.5 pr-3 text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ background: row.color }}
-                    />
-                    {row.label}
+              {sorted.map((r) => (
+                <th key={r.id} className="pb-2 px-2 text-right font-semibold text-foreground">
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="truncate max-w-[90px] block">{r.name}</span>
+                    <span className="font-normal text-muted-foreground text-[10px]">
+                      {FINANCING_LABELS[r.financingMode]}
+                    </span>
                   </div>
-                </td>
-                {sorted.map((r, i) => {
-                  const val = (r.breakdown as any)[row.key] as number;
-                  const isBest = isMulti && val > 0 && val === minVal;
-                  return (
-                    <td
-                      key={r.id}
-                      className={`py-2.5 px-2 text-right tabular-nums font-medium ${
-                        val === 0
-                          ? "text-muted-foreground/40"
-                          : isBest
-                          ? "text-highlight font-semibold"
-                          : "text-foreground"
-                      }`}
-                    >
-                      {val === 0 ? "—" : formatCurrency(val, currency)}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {activeRows.map((row) => {
+              // Compute scaled values for each car, then find the min for highlighting
+              const scaledValues = sorted.map((r) => {
+                const total = (r.breakdown as any)[row.key] as number;
+                return total > 0 ? scale(total, r) : 0;
+              });
+              const nonZero = scaledValues.filter((v) => v > 0);
+              const minVal = nonZero.length > 0 ? Math.min(...nonZero) : -1;
 
-          {/* Total row */}
-          <tr className="border-t-2 border-border bg-secondary/20">
-            <td className="py-2.5 pr-3 font-semibold text-foreground">Total cost</td>
-            {sorted.map((r) => (
-              <td key={r.id} className="py-2.5 px-2 text-right font-bold tabular-nums text-foreground">
-                {formatCurrency(r.totalOwnershipCost, currency)}
-              </td>
-            ))}
-          </tr>
-          <tr className="bg-secondary/20">
-            <td className="pb-2.5 pr-3 text-muted-foreground">Per month</td>
-            {sorted.map((r) => (
-              <td key={r.id} className="pb-2.5 px-2 text-right tabular-nums text-muted-foreground font-medium">
-                {formatCurrency(r.monthlyCost, currency)}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
+              return (
+                <tr key={row.key} className="border-b border-border/40 last:border-0">
+                  <td className="py-2.5 pr-3 text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: row.color }}
+                      />
+                      {row.label}
+                    </div>
+                  </td>
+                  {scaledValues.map((val, i) => {
+                    const isBest = isMulti && val > 0 && val === minVal;
+                    return (
+                      <td
+                        key={sorted[i].id}
+                        className={[
+                          "py-2.5 px-2 text-right tabular-nums font-medium",
+                          val === 0
+                            ? "text-muted-foreground/35"
+                            : isBest
+                            ? "text-highlight font-semibold"
+                            : "text-foreground",
+                        ].join(" ")}
+                      >
+                        {val === 0 ? "—" : formatCurrency(val, currency)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-      {sorted.length > 1 && (
-        <p className="text-[10px] text-muted-foreground mt-3 text-center">
+      {/* ── Permanent summary footer — all three modes always shown ──────── */}
+      <div className="rounded-xl border border-border/60 overflow-hidden">
+        {/* Header row */}
+        <div className="grid border-b border-border/50 bg-secondary/30"
+          style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
+        >
+          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+            Summary
+          </div>
+          {sorted.map((r) => (
+            <div key={r.id} className="px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground truncate">
+              {r.name.length > 12 ? r.name.slice(0, 10) + "…" : r.name}
+            </div>
+          ))}
+        </div>
+
+        {/* Three summary rows — each highlights when it matches the active viewMode */}
+        {([
+          { key: "monthly" as ViewMode, label: "Per month", getValue: (r: CarResult) => r.monthlyCost },
+          { key: "yearly"  as ViewMode, label: "Per year",  getValue: (r: CarResult) => r.yearlyCost },
+          { key: "total"   as ViewMode, label: "Total",     getValue: (r: CarResult) => r.totalOwnershipCost },
+        ]).map(({ key, label, getValue }) => {
+          const isActive = viewMode === key;
+          return (
+            <div
+              key={key}
+              className={[
+                "grid border-b border-border/40 last:border-0 transition-colors",
+                isActive
+                  ? "bg-highlight/6"
+                  : "bg-transparent",
+              ].join(" ")}
+              style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
+            >
+              <div className={[
+                "px-3 py-2.5 text-xs",
+                isActive
+                  ? "font-semibold text-foreground"
+                  : "font-medium text-muted-foreground",
+              ].join(" ")}>
+                <div className="flex items-center gap-1.5">
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-highlight shrink-0" />
+                  )}
+                  {label}
+                </div>
+              </div>
+              {sorted.map((r) => (
+                <div
+                  key={r.id}
+                  className={[
+                    "px-2 py-2.5 text-right tabular-nums text-xs",
+                    isActive
+                      ? "font-bold text-foreground"
+                      : "font-medium text-muted-foreground",
+                  ].join(" ")}
+                >
+                  {formatCurrency(getValue(r), currency)}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      {isMulti && (
+        <p className="text-[10px] text-muted-foreground text-center">
           Green = lowest in category
         </p>
       )}
