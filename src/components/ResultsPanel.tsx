@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, LabelList,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
@@ -10,238 +11,402 @@ interface ResultsPanelProps {
   currency: Currency;
 }
 
-const CHART_COLORS = {
-  cheapest: "hsl(152, 45%, 48%)",
-  normal: "hsl(220, 8%, 75%)",
-};
-
-const BREAKDOWN_COLORS: Record<string, string> = {
-  depreciation: "hsl(220, 14%, 40%)",
-  fuel: "hsl(38, 80%, 50%)",
-  insurance: "hsl(215, 55%, 55%)",
-  tax: "hsl(280, 40%, 55%)",
-  service: "hsl(152, 45%, 48%)",
-  financingCost: "hsl(0, 65%, 55%)",
-  leaseCost: "hsl(200, 60%, 50%)",
-  downPayment: "hsl(30, 50%, 55%)",
-  endOfTermFee: "hsl(340, 40%, 55%)",
-  mileagePenalty: "hsl(15, 70%, 55%)",
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  depreciation: "Depreciation",
-  fuel: "Fuel / Energy",
-  insurance: "Insurance",
-  tax: "Tax",
-  service: "Service",
-  financingCost: "Financing cost",
-  leaseCost: "Lease payments",
-  downPayment: "Down payment",
-  endOfTermFee: "End-of-term fee",
-  mileagePenalty: "Mileage penalty",
-};
+type Tab = "overview" | "breakdown" | "chart";
 
 const FINANCING_LABELS: Record<string, string> = {
-  cash: "Cash purchase",
-  loan: "Loan / Financing",
-  leasing: "Leasing",
+  cash: "Cash",
+  loan: "Loan",
+  leasing: "Lease",
 };
 
-const STAT_COLORS: Record<string, string> = {
-  Yearly: "text-primary",
-  Total: "text-primary",
-  Depreciation: "text-[hsl(220,14%,40%)]",
-  Fuel: "text-[hsl(38,80%,50%)]",
-  Insurance: "text-[hsl(215,55%,55%)]",
-  Tax: "text-[hsl(280,40%,55%)]",
-  Service: "text-[hsl(152,45%,48%)]",
-  Financing: "text-[hsl(0,65%,55%)]",
-  Lease: "text-[hsl(200,60%,50%)]",
-  Residual: "text-accent",
+const BREAKDOWN_ROWS: { key: string; label: string; color: string }[] = [
+  { key: "depreciation", label: "Depreciation",   color: "hsl(220,14%,40%)" },
+  { key: "financingCost", label: "Financing",      color: "hsl(0,65%,55%)" },
+  { key: "leaseCost",     label: "Lease payments", color: "hsl(200,60%,50%)" },
+  { key: "fuel",          label: "Fuel / Energy",  color: "hsl(38,80%,50%)" },
+  { key: "insurance",     label: "Insurance",      color: "hsl(215,55%,55%)" },
+  { key: "tax",           label: "Tax",            color: "hsl(280,40%,55%)" },
+  { key: "service",       label: "Service",        color: "hsl(152,45%,48%)" },
+  { key: "downPayment",   label: "Down payment",   color: "hsl(30,50%,55%)" },
+  { key: "mileagePenalty",label: "Mileage penalty",color: "hsl(15,70%,55%)" },
+  { key: "endOfTermFee",  label: "End-of-term fee",color: "hsl(340,40%,55%)" },
+];
+
+const CHART_COLORS = {
+  cheapest: "hsl(152,45%,48%)",
+  normal: "hsl(220,8%,78%)",
 };
 
 export function ResultsPanel({ results, currency }: ResultsPanelProps) {
+  const [tab, setTab] = useState<Tab>("overview");
+
   if (results.length === 0) return null;
 
-  // Add verdicts
   const resultsWithVerdicts = results.map((r) => ({
     ...r,
     verdict: generateVerdict(r, results),
   }));
 
-  // Sort by monthly cost
   const sorted = [...resultsWithVerdicts].sort((a, b) => a.monthlyCost - b.monthlyCost);
   const cheapestMonthly = sorted[0]?.monthlyCost ?? 0;
   const maxMonthly = sorted[sorted.length - 1]?.monthlyCost ?? 0;
 
-  const chartData = sorted.map((r) => ({
-    name: r.name.length > 14 ? r.name.slice(0, 12) + "…" : r.name,
-    fullName: r.name,
-    monthly: r.monthlyCost,
-    isCheapest: r.monthlyCost === cheapestMonthly && results.length > 1,
-  }));
-
-  // Active breakdown categories (non-zero across all results)
-  const breakdownKeys = ["depreciation", "fuel", "insurance", "tax", "service", "financingCost", "leaseCost", "downPayment", "endOfTermFee", "mileagePenalty"] as const;
-  const activeKeys = breakdownKeys.filter((k) => sorted.some((r) => (r.breakdown as any)[k] > 0));
-
-  const breakdownData = sorted.map((r) => {
-    const d: any = { name: r.name.length > 14 ? r.name.slice(0, 12) + "…" : r.name };
-    activeKeys.forEach((k) => { d[k] = (r.breakdown as any)[k]; });
-    return d;
-  });
+  // Active breakdown rows — only show rows that have a value in at least one car
+  const activeRows = BREAKDOWN_ROWS.filter((r) =>
+    sorted.some((car) => (car.breakdown as any)[r.key] > 0)
+  );
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold tracking-tight">Comparison</h2>
-
-      {/* Summary cards - sorted cheapest first */}
-      <div className="grid gap-3">
-        {sorted.map((result, idx) => {
-          const isCheapest = idx === 0 && results.length > 1;
-          const diff = result.monthlyCost - cheapestMonthly;
-          const barWidth = maxMonthly > 0 ? (result.monthlyCost / maxMonthly) * 100 : 0;
-
-          return (
-            <div key={result.id}
-              className={`rounded-2xl p-4 sm:p-5 border transition-all ${
-                isCheapest ? "bg-highlight-soft border-highlight/30 ring-1 ring-highlight/20" : "bg-card border-border/60"
-              }`}>
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {result.brand && <BrandLogo brand={result.brand} size="md" />}
-                    <div>
-                      <h3 className="font-semibold text-sm sm:text-base">{result.name}</h3>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {result.fuelType && <FuelBadge fuelType={result.fuelType} />}
-                        <span className="text-[10px] font-medium text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
-                          {FINANCING_LABELS[result.financingMode]}
-                        </span>
-                        {isCheapest && (
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-highlight bg-highlight/10 px-2 py-0.5 rounded-full">
-                            Cheapest
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl sm:text-2xl font-bold tracking-tight">
-                    {formatCurrency(result.monthlyCost, currency)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">per month</div>
-                  {diff > 0 && results.length > 1 && (
-                    <div className="text-xs text-destructive mt-0.5">
-                      +{formatCurrency(diff, currency)}/mo
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="h-1.5 rounded-full bg-secondary overflow-hidden mb-3">
-                <div className={`h-full rounded-full transition-all duration-500 ${
-                  isCheapest ? "bg-highlight" : "bg-muted-foreground/30"
-                }`} style={{ width: `${barWidth}%` }} />
-              </div>
-
-              {/* Verdict */}
-              {result.verdict && (
-                <p className="text-xs font-medium text-muted-foreground mb-3 italic">
-                  💡 {result.verdict}
-                </p>
-              )}
-
-              {/* Stats grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <Stat label="Yearly" value={formatCurrency(result.yearlyCost, currency)} />
-                <Stat label="Total" value={formatCurrency(result.totalOwnershipCost, currency)} />
-                {result.breakdown.depreciation > 0 && <Stat label="Depreciation" value={formatCurrency(result.breakdown.depreciation, currency)} />}
-                <Stat label="Fuel" value={formatCurrency(result.breakdown.fuel, currency)} />
-                <Stat label="Insurance" value={formatCurrency(result.breakdown.insurance, currency)} />
-                <Stat label="Tax" value={formatCurrency(result.breakdown.tax, currency)} />
-                <Stat label="Service" value={formatCurrency(result.breakdown.service, currency)} />
-                {result.breakdown.financingCost > 0 && <Stat label="Financing" value={formatCurrency(result.breakdown.financingCost, currency)} />}
-                {result.breakdown.leaseCost > 0 && <Stat label="Lease" value={formatCurrency(result.breakdown.leaseCost, currency)} />}
-                {result.breakdown.downPayment > 0 && <Stat label="Down payment" value={formatCurrency(result.breakdown.downPayment, currency)} />}
-                {result.breakdown.mileagePenalty > 0 && <Stat label="Mileage penalty" value={formatCurrency(result.breakdown.mileagePenalty, currency)} />}
-                {result.residualValuePercent > 0 && <Stat label="Residual" value={`${result.residualValuePercent}%`} />}
-              </div>
-            </div>
-          );
-        })}
+    <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+      {/* Tab bar */}
+      <div className="flex border-b border-border/60 bg-secondary/30">
+        {(["overview", "breakdown", "chart"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-3 text-xs font-semibold uppercase tracking-widest transition-colors ${
+              tab === t
+                ? "text-foreground border-b-2 border-foreground -mb-px bg-card"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      {/* Monthly cost chart */}
-      {results.length >= 2 && (
-        <div className="rounded-2xl bg-card border border-border/60 p-4 sm:p-5">
-          <p className="text-xs text-muted-foreground mb-3">Monthly cost comparison</p>
-          <ResponsiveContainer width="100%" height={sorted.length * 52 + 16}>
-            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 60, top: 0, bottom: 0 }}>
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={90}
-                tick={{ fontSize: 11, fill: "hsl(220, 8%, 55%)" }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "hsl(220, 10%, 94%, 0.5)" }}
-                contentStyle={{ background: "hsl(0,0%,100%)", border: "1px solid hsl(220,13%,90%)", borderRadius: "12px", fontSize: "13px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                formatter={(value: number) => [formatCurrency(value, currency), "Monthly"]} />
-              <Bar dataKey="monthly" radius={[0, 6, 6, 0]} barSize={28}>
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal} />
-                ))}
-                <LabelList dataKey="monthly" position="right"
-                  formatter={(v: number) => formatCurrency(v, currency)}
-                  style={{ fontSize: 11, fill: "hsl(220, 8%, 45%)" }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <div className="p-4 sm:p-5">
+        {tab === "overview" && (
+          <OverviewTab sorted={sorted} cheapestMonthly={cheapestMonthly} currency={currency} results={results} />
+        )}
+        {tab === "breakdown" && (
+          <BreakdownTab sorted={sorted} activeRows={activeRows} currency={currency} />
+        )}
+        {tab === "chart" && (
+          <ChartTab sorted={sorted} cheapestMonthly={cheapestMonthly} maxMonthly={maxMonthly} currency={currency} />
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {/* Cost breakdown stacked chart */}
-      {activeKeys.length > 0 && (
-        <div className="rounded-2xl bg-card border border-border/60 p-4 sm:p-5">
-          <p className="text-xs text-muted-foreground mb-3">Cost breakdown (total)</p>
-          <ResponsiveContainer width="100%" height={sorted.length * 52 + 48}>
-            <BarChart data={breakdownData} layout="vertical" margin={{ left: 0, right: 12, top: 0, bottom: 0 }}>
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={90}
-                tick={{ fontSize: 11, fill: "hsl(220, 8%, 55%)" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "hsl(0,0%,100%)", border: "1px solid hsl(220,13%,90%)", borderRadius: "12px", fontSize: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                formatter={(value: number, name: string) => [formatCurrency(value, currency), CATEGORY_LABELS[name] || name]} />
-              <Legend iconType="circle" iconSize={8}
-                wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-                formatter={(value) => CATEGORY_LABELS[value] || value} />
-              {activeKeys.map((key, i) => (
-                <Bar key={key} dataKey={key} stackId="a"
-                  fill={BREAKDOWN_COLORS[key]}
-                  radius={i === activeKeys.length - 1 ? [0, 6, 6, 0] : undefined}
-                  barSize={24} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+// ─── Overview Tab ────────────────────────────────────────────────────────────
 
-      {results.length > 1 && (
-        <div className="text-center text-sm text-muted-foreground">
-          You save{" "}
+function OverviewTab({
+  sorted, cheapestMonthly, currency, results,
+}: {
+  sorted: (CarResult & { verdict: string })[];
+  cheapestMonthly: number;
+  currency: Currency;
+  results: CarResult[];
+}) {
+  return (
+    <div className="space-y-3">
+      {sorted.map((result, idx) => {
+        const isCheapest = idx === 0 && results.length > 1;
+        const diff = result.monthlyCost - cheapestMonthly;
+
+        return (
+          <div
+            key={result.id}
+            className={`rounded-xl p-4 border transition-all ${
+              isCheapest
+                ? "bg-highlight-soft border-highlight/25 ring-1 ring-highlight/15"
+                : "bg-background border-border/60"
+            }`}
+          >
+            {/* Top row: identity + monthly cost */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {result.brand && <BrandLogo brand={result.brand} size="md" />}
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm truncate">{result.name}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {result.fuelType && <FuelBadge fuelType={result.fuelType} />}
+                    <span className="text-[10px] font-medium text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                      {FINANCING_LABELS[result.financingMode]}
+                    </span>
+                    {isCheapest && (
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-highlight bg-highlight/12 px-2 py-0.5 rounded-full">
+                        Best value
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly cost — the hero number */}
+              <div className="text-right shrink-0">
+                <div className="text-2xl font-bold tracking-tight tabular-nums">
+                  {formatCurrency(result.monthlyCost, currency)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">per month</div>
+              </div>
+            </div>
+
+            {/* Secondary stats row */}
+            <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-3 gap-2">
+              <MiniStat
+                label="Total"
+                value={formatCurrency(result.totalOwnershipCost, currency)}
+              />
+              <MiniStat
+                label="Per year"
+                value={formatCurrency(result.yearlyCost, currency)}
+              />
+              <MiniStat
+                label={diff > 0 && results.length > 1 ? "vs cheapest" : "Residual"}
+                value={
+                  diff > 0 && results.length > 1
+                    ? `+${formatCurrency(diff, currency)}/mo`
+                    : result.residualValuePercent > 0
+                    ? `${result.residualValuePercent}%`
+                    : "—"
+                }
+                accent={diff > 0 && results.length > 1 ? "negative" : undefined}
+              />
+            </div>
+
+            {/* Verdict */}
+            {result.verdict && (
+              <p className="mt-2 text-[11px] text-muted-foreground italic">
+                💡 {result.verdict}
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      {sorted.length > 1 && (
+        <div className="text-center text-xs text-muted-foreground pt-1">
+          Choosing the cheapest option saves{" "}
           <span className="font-semibold text-highlight">
-            {formatCurrency(maxMonthly - cheapestMonthly, currency)}/mo
-          </span>{" "}
-          by choosing the cheapest option.
+            {formatCurrency(
+              sorted[sorted.length - 1].monthlyCost - sorted[0].monthlyCost,
+              currency
+            )}
+            /mo
+          </span>
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  const colorClass = STAT_COLORS[label] || "text-foreground";
+function MiniStat({
+  label, value, accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "negative";
+}) {
   return (
     <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`font-semibold ${colorClass}`}>{value}</div>
+      <div className="text-[10px] text-muted-foreground mb-0.5">{label}</div>
+      <div
+        className={`text-xs font-semibold tabular-nums ${
+          accent === "negative" ? "text-destructive" : "text-foreground"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── Breakdown Tab ───────────────────────────────────────────────────────────
+
+function BreakdownTab({
+  sorted, activeRows, currency,
+}: {
+  sorted: CarResult[];
+  activeRows: typeof BREAKDOWN_ROWS;
+  currency: Currency;
+}) {
+  const isMulti = sorted.length > 1;
+
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-xs min-w-[260px]">
+        <thead>
+          <tr className="border-b border-border/60">
+            <th className="text-left pb-2 pr-3 text-muted-foreground font-medium w-28">
+              Category
+            </th>
+            {sorted.map((r) => (
+              <th key={r.id} className="pb-2 px-2 text-right font-semibold text-foreground">
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className="truncate max-w-[90px] block">{r.name}</span>
+                  <span className="font-normal text-muted-foreground text-[10px]">
+                    {FINANCING_LABELS[r.financingMode]}
+                  </span>
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {activeRows.map((row) => {
+            const values = sorted.map((r) => (r.breakdown as any)[row.key] as number);
+            const minVal = Math.min(...values.filter((v) => v > 0));
+            return (
+              <tr key={row.key} className="border-b border-border/40 last:border-0">
+                <td className="py-2.5 pr-3 text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: row.color }}
+                    />
+                    {row.label}
+                  </div>
+                </td>
+                {sorted.map((r, i) => {
+                  const val = (r.breakdown as any)[row.key] as number;
+                  const isBest = isMulti && val > 0 && val === minVal;
+                  return (
+                    <td
+                      key={r.id}
+                      className={`py-2.5 px-2 text-right tabular-nums font-medium ${
+                        val === 0
+                          ? "text-muted-foreground/40"
+                          : isBest
+                          ? "text-highlight font-semibold"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {val === 0 ? "—" : formatCurrency(val, currency)}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+
+          {/* Total row */}
+          <tr className="border-t-2 border-border bg-secondary/20">
+            <td className="py-2.5 pr-3 font-semibold text-foreground">Total cost</td>
+            {sorted.map((r) => (
+              <td key={r.id} className="py-2.5 px-2 text-right font-bold tabular-nums text-foreground">
+                {formatCurrency(r.totalOwnershipCost, currency)}
+              </td>
+            ))}
+          </tr>
+          <tr className="bg-secondary/20">
+            <td className="pb-2.5 pr-3 text-muted-foreground">Per month</td>
+            {sorted.map((r) => (
+              <td key={r.id} className="pb-2.5 px-2 text-right tabular-nums text-muted-foreground font-medium">
+                {formatCurrency(r.monthlyCost, currency)}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+
+      {sorted.length > 1 && (
+        <p className="text-[10px] text-muted-foreground mt-3 text-center">
+          Green = lowest in category
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Chart Tab ───────────────────────────────────────────────────────────────
+
+function ChartTab({
+  sorted, cheapestMonthly, maxMonthly, currency,
+}: {
+  sorted: CarResult[];
+  cheapestMonthly: number;
+  maxMonthly: number;
+  currency: Currency;
+}) {
+  const chartData = sorted.map((r) => ({
+    name: r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name,
+    monthly: r.monthlyCost,
+    isCheapest: r.monthlyCost === cheapestMonthly && sorted.length > 1,
+  }));
+
+  const barHeight = 40;
+  const chartHeight = Math.max(sorted.length * (barHeight + 16) + 16, 80);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground font-medium">Monthly cost</p>
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ left: 0, right: 64, top: 4, bottom: 0 }}
+        >
+          <XAxis type="number" hide />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={96}
+            tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            cursor={{ fill: "hsl(220,10%,96%)" }}
+            contentStyle={{
+              background: "white",
+              border: "1px solid hsl(220,13%,90%)",
+              borderRadius: "10px",
+              fontSize: "12px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
+            }}
+            formatter={(value: number) => [formatCurrency(value, currency), "Monthly"]}
+          />
+          <Bar dataKey="monthly" radius={[0, 6, 6, 0]} barSize={barHeight}>
+            {chartData.map((entry, i) => (
+              <Cell
+                key={i}
+                fill={entry.isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal}
+              />
+            ))}
+            <LabelList
+              dataKey="monthly"
+              position="right"
+              formatter={(v: number) => formatCurrency(v, currency)}
+              style={{ fontSize: 11, fill: "hsl(220,8%,45%)", fontWeight: 600 }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      {sorted.length > 1 && (
+        <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+          <p className="text-xs text-muted-foreground font-medium">Total ownership cost</p>
+          <div className="space-y-2">
+            {sorted.map((r, i) => {
+              const maxTotal = Math.max(...sorted.map((x) => x.totalOwnershipCost));
+              const pct = maxTotal > 0 ? (r.totalOwnershipCost / maxTotal) * 100 : 0;
+              const isCheapest = i === 0;
+              return (
+                <div key={r.id}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
+                    <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
+                      {formatCurrency(r.totalOwnershipCost, currency)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${pct}%`,
+                        background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
