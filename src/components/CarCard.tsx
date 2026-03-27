@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { X, Car, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Car, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
 import { FinancingSelector } from "@/components/FinancingSelector";
@@ -15,11 +15,12 @@ interface CarCardProps {
   car: CarInput;
   index: number;
   canRemove: boolean;
+  canDuplicate: boolean;
   onChange: (car: CarInput) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
 }
 
-// ─── Small labelled section wrapper ──────────────────────────────────────────
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
@@ -31,17 +32,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
-export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardProps) {
-  // ── Per-card isolated UI state ──
-  // This useState is strictly LOCAL to each CarCard instance.
-  // React guarantees a separate state per mounted instance, as long as the
-  // parent uses stable keys (which Index.tsx does via car.id).
-  // We also explicitly reset it on brand change and finance mode change
-  // to prevent showing stale advanced panels from a previous config.
+export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemove, onDuplicate }: CarCardProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
   const brands = getBrands();
   const models = car.brand ? getModels(car.brand) : [];
 
@@ -52,7 +45,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
     update({ leasing: { ...car.leasing, ...partial } });
 
   const handleBrandChange = (brand: string) => {
-    // Close advanced when brand changes — prevents ghost open state
     setAdvancedOpen(false);
     onChange({
       ...car,
@@ -65,7 +57,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
       taxCost: 0,
       serviceCost: 0,
       isConfigured: false,
-      // Also reset loan fields that depend on purchase price
       loan: { ...car.loan, downPayment: 0, residualBalloon: 0 },
     });
   };
@@ -89,8 +80,6 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
     });
   };
 
-  // Close advanced when switching financing mode — the advanced panel content
-  // differs per mode, so leaving it open would show the wrong fields briefly.
   const handleFinancingModeChange = (mode: FinancingMode) => {
     setAdvancedOpen(false);
     update({ financingMode: mode });
@@ -100,41 +89,44 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
     update({ fuelType: ft, fuelPrice: getDefaultFuelPrice(ft) });
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────────
   const fuelLabel = car.fuelType === "electric" ? "kWh/100km" : "L/100km";
   const priceLabel = car.fuelType === "electric" ? "SEK/kWh" : "SEK/L";
   const currentModel = car.brand && car.model ? findCarModel(car.brand, car.model) : null;
   const hasSingleFuelType = !!currentModel;
 
-  const ownershipYears =
-    car.financingMode === "loan"
-      ? car.loan.loanTermMonths / 12
-      : car.financingMode === "leasing"
-      ? car.leasing.leaseDurationMonths / 12
-      : car.ownershipYears;
-
-  const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType);
+  const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
   const loanAmount = Math.max(0, car.purchasePrice - car.loan.downPayment);
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-white rounded-2xl border border-border/70 shadow-sm overflow-hidden relative group">
+    <div className="bg-card rounded-2xl border border-border/70 shadow-sm overflow-hidden relative group">
 
-      {/* Remove button */}
-      {canRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="absolute top-3 right-3 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-secondary/80 z-10"
-          aria-label="Remove car"
-        >
-          <X className="w-4 h-4 text-muted-foreground" />
-        </button>
-      )}
+      {/* Action buttons */}
+      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        {canDuplicate && car.isConfigured && (
+          <button
+            type="button"
+            onClick={onDuplicate}
+            className="p-1.5 rounded-full hover:bg-secondary/80 transition-colors"
+            aria-label="Duplicate car"
+            title="Duplicate car"
+          >
+            <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        )}
+        {canRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="p-1.5 rounded-full hover:bg-secondary/80 transition-colors"
+            aria-label="Remove car"
+          >
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        )}
+      </div>
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="px-5 pt-5 pb-4">
-        {/* Car identity — shown once configured */}
         {car.isConfigured && car.name ? (
           <div className="flex items-center gap-2.5 pr-7 mb-4">
             <BrandLogo brand={car.brand} size="md" />
@@ -161,7 +153,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground font-medium">Brand</Label>
             <Select value={car.brand || undefined} onValueChange={handleBrandChange}>
-              <SelectTrigger className="h-9 text-sm bg-white border border-border/70 hover:border-border shadow-none focus:ring-2 focus:ring-ring/10">
+              <SelectTrigger className="h-9 text-sm bg-card border border-border/70 hover:border-border shadow-none focus:ring-2 focus:ring-ring/10">
                 <SelectValue placeholder="Select brand" />
               </SelectTrigger>
               <SelectContent>
@@ -184,7 +176,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               onValueChange={handleModelChange}
               disabled={!car.brand}
             >
-              <SelectTrigger className="h-9 text-sm bg-white border border-border/70 hover:border-border shadow-none focus:ring-2 focus:ring-ring/10 disabled:opacity-50">
+              <SelectTrigger className="h-9 text-sm bg-card border border-border/70 hover:border-border shadow-none focus:ring-2 focus:ring-ring/10 disabled:opacity-50">
                 <SelectValue placeholder={car.brand ? "Select model" : "Pick brand first"} />
               </SelectTrigger>
               <SelectContent>
@@ -199,7 +191,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
         </div>
       </div>
 
-      {/* ── Unconfigured placeholder ─────────────────────────────────────────── */}
+      {/* Unconfigured placeholder */}
       {!car.isConfigured && (
         <div className="mx-4 mb-5 flex flex-col items-center justify-center py-7 text-center rounded-xl bg-secondary/30 border border-dashed border-border/60">
           <div className="w-9 h-9 rounded-full bg-secondary/70 flex items-center justify-center mb-2.5">
@@ -210,7 +202,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
         </div>
       )}
 
-      {/* ── Configured state ─────────────────────────────────────────────────── */}
+      {/* Configured state */}
       {car.isConfigured && (
         <>
           <div className="h-px bg-border/50" />
@@ -228,10 +220,10 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
 
           <div className="h-px bg-border/40 mx-5" />
 
-          {/* ── Essential inputs ─────────────────────────────────────────────── */}
+          {/* Essential inputs */}
           <div className="px-5 py-4 space-y-5">
 
-            {/* Vehicle basics — same for all modes */}
+            {/* Vehicle basics */}
             <Section label="Vehicle">
               <div className="grid grid-cols-2 gap-2.5">
                 <NumericInput
@@ -256,7 +248,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
                       value={car.fuelType}
                       onValueChange={(v: FuelType) => handleFuelTypeChange(v)}
                     >
-                      <SelectTrigger className="h-9 text-sm bg-white border border-border/70">
+                      <SelectTrigger className="h-9 text-sm bg-card border border-border/70">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -286,8 +278,8 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               </div>
             </Section>
 
-            {/* ── Cash ─────────────────────────────────────────────────────── */}
-            {car.financingMode === "cash" && (
+            {/* ── Ownership — always visible for cash and loan ──────────── */}
+            {(car.financingMode === "cash" || car.financingMode === "loan") && (
               <Section label="Ownership">
                 <div className="grid grid-cols-2 gap-2.5">
                   <NumericInput
@@ -306,7 +298,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               </Section>
             )}
 
-            {/* ── Loan ─────────────────────────────────────────────────────── */}
+            {/* ── Loan main fields ─────────────────────────────────────── */}
             {car.financingMode === "loan" && (
               <Section label="Loan details">
                 <div className="grid grid-cols-2 gap-2.5">
@@ -345,7 +337,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               </Section>
             )}
 
-            {/* ── Leasing ──────────────────────────────────────────────────── */}
+            {/* ── Leasing main fields ──────────────────────────────────── */}
             {car.financingMode === "leasing" && (
               <Section label="Lease details">
                 <div className="grid grid-cols-2 gap-2.5">
@@ -386,23 +378,7 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
             )}
           </div>
 
-          {/* ── Advanced toggle + panel ──────────────────────────────────────────
-            KEY ARCHITECTURAL NOTES:
-            1. advancedOpen is useState — local to THIS instance only.
-               Each CarCard gets its own React fiber, its own state bucket.
-               Opening on card A cannot affect card B.
-
-            2. The panel uses conditional RENDERING ({advancedOpen && ...}),
-               NOT CSS show/hide. When closed, zero DOM nodes exist for
-               the panel body — no ghost borders, no empty white space.
-
-            3. We call setAdvancedOpen(false) on brand change, model change,
-               and financing mode change. This prevents the panel from staying
-               open and showing stale fields from a previous configuration.
-
-            4. The toggle button itself always renders (so the user can always
-               open it), but the CONTENT below is gated on advancedOpen.
-          ──────────────────────────────────────────────────────────────────── */}
+          {/* ── Advanced toggle + panel ──────────────────────────────────── */}
           <div className="border-t border-border/40">
             <button
               type="button"
@@ -416,11 +392,10 @@ export function CarCard({ car, index, canRemove, onChange, onRemove }: CarCardPr
               }
             </button>
 
-            {/* Content — only in DOM when open, preventing ghost layout */}
             {advancedOpen && (
               <div className="px-5 pb-5 pt-4 space-y-5 bg-secondary/10 border-t border-border/30">
 
-                {/* Running costs — present for all financing modes */}
+                {/* Running costs */}
                 <Section label="Running costs">
                   <div className="grid grid-cols-2 gap-2.5">
                     <NumericInput

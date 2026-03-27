@@ -51,7 +51,6 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
   const cheapestMonthly = sorted[0]?.monthlyCost ?? 0;
   const maxMonthly = sorted[sorted.length - 1]?.monthlyCost ?? 0;
 
-  // Active breakdown rows — only show rows that have a value in at least one car
   const activeRows = BREAKDOWN_ROWS.filter((r) =>
     sorted.some((car) => (car.breakdown as any)[r.key] > 0)
   );
@@ -145,7 +144,7 @@ function OverviewTab({
             </div>
 
             {/* Secondary stats row */}
-            <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-3 gap-2">
+            <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-4 gap-2">
               <MiniStat
                 label="Total"
                 value={formatCurrency(result.totalOwnershipCost, currency)}
@@ -153,6 +152,10 @@ function OverviewTab({
               <MiniStat
                 label="Per year"
                 value={formatCurrency(result.yearlyCost, currency)}
+              />
+              <MiniStat
+                label="Per km"
+                value={formatCurrency(result.costPerKm, currency)}
               />
               <MiniStat
                 label={diff > 0 && results.length > 1 ? "vs cheapest" : "Residual"}
@@ -228,21 +231,13 @@ function BreakdownTab({
   const [viewMode, setViewMode] = useState<ViewMode>("monthly");
   const isMulti = sorted.length > 1;
 
-  // Derive ownership months per car from existing CarResult fields.
-  // totalOwnershipCost / monthlyCost = total months. Safe as long as monthlyCost > 0.
-  function getMonths(r: CarResult): number {
-    return r.monthlyCost > 0 ? Math.round(r.totalOwnershipCost / r.monthlyCost) : 12;
-  }
-  function getYears(r: CarResult): number {
-    return r.yearlyCost > 0 ? Math.round(r.totalOwnershipCost / r.yearlyCost) : 1;
-  }
-
-  // Scale a breakdown value (stored as TOTAL) to the selected view mode.
+  // Use ownershipMonths from CarResult — exact, not derived from rounded values
   function scale(totalVal: number, r: CarResult): number {
+    const months = r.ownershipMonths;
+    const years = months / 12;
     if (viewMode === "total") return totalVal;
-    if (viewMode === "yearly") return Math.round(totalVal / Math.max(1, getYears(r)));
-    // monthly
-    return Math.round(totalVal / Math.max(1, getMonths(r)));
+    if (viewMode === "yearly") return totalVal / Math.max(1, years);
+    return totalVal / Math.max(1, months);
   }
 
   const VIEW_MODES: { key: ViewMode; label: string }[] = [
@@ -254,7 +249,7 @@ function BreakdownTab({
   return (
     <div className="space-y-4">
 
-      {/* ── View-mode toggle ─────────────────────────────────────────────── */}
+      {/* View-mode toggle */}
       <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
         {VIEW_MODES.map((m) => {
           const active = viewMode === m.key;
@@ -266,8 +261,8 @@ function BreakdownTab({
               className={[
                 "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 select-none",
                 active
-                  ? "bg-white text-foreground shadow-sm border border-border/40"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/50",
+                  ? "bg-card text-foreground shadow-sm border border-border/40"
+                  : "text-muted-foreground hover:text-foreground hover:bg-card/50",
               ].join(" ")}
             >
               {m.label}
@@ -276,7 +271,7 @@ function BreakdownTab({
         })}
       </div>
 
-      {/* ── Category table ───────────────────────────────────────────────── */}
+      {/* Category table */}
       <div className="overflow-x-auto -mx-1">
         <table className="w-full text-xs min-w-[260px]">
           <thead>
@@ -298,10 +293,9 @@ function BreakdownTab({
           </thead>
           <tbody>
             {activeRows.map((row) => {
-              // Compute scaled values for each car, then find the min for highlighting
               const scaledValues = sorted.map((r) => {
                 const total = (r.breakdown as any)[row.key] as number;
-                return total > 0 ? scale(total, r) : 0;
+                return total > 0 ? Math.round(scale(total, r)) : 0;
               });
               const nonZero = scaledValues.filter((v) => v > 0);
               const minVal = nonZero.length > 0 ? Math.min(...nonZero) : -1;
@@ -342,9 +336,8 @@ function BreakdownTab({
         </table>
       </div>
 
-      {/* ── Permanent summary footer — all three modes always shown ──────── */}
+      {/* Permanent summary footer */}
       <div className="rounded-xl border border-border/60 overflow-hidden">
-        {/* Header row */}
         <div className="grid border-b border-border/50 bg-secondary/30"
           style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
         >
@@ -358,7 +351,6 @@ function BreakdownTab({
           ))}
         </div>
 
-        {/* Three summary rows — each highlights when it matches the active viewMode */}
         {([
           { key: "monthly" as ViewMode, label: "Per month", getValue: (r: CarResult) => r.monthlyCost },
           { key: "yearly"  as ViewMode, label: "Per year",  getValue: (r: CarResult) => r.yearlyCost },
@@ -370,17 +362,13 @@ function BreakdownTab({
               key={key}
               className={[
                 "grid border-b border-border/40 last:border-0 transition-colors",
-                isActive
-                  ? "bg-highlight/6"
-                  : "bg-transparent",
+                isActive ? "bg-highlight/6" : "bg-transparent",
               ].join(" ")}
               style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
             >
               <div className={[
                 "px-3 py-2.5 text-xs",
-                isActive
-                  ? "font-semibold text-foreground"
-                  : "font-medium text-muted-foreground",
+                isActive ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
               ].join(" ")}>
                 <div className="flex items-center gap-1.5">
                   {isActive && (
@@ -394,9 +382,7 @@ function BreakdownTab({
                   key={r.id}
                   className={[
                     "px-2 py-2.5 text-right tabular-nums text-xs",
-                    isActive
-                      ? "font-bold text-foreground"
-                      : "font-medium text-muted-foreground",
+                    isActive ? "font-bold text-foreground" : "font-medium text-muted-foreground",
                   ].join(" ")}
                 >
                   {formatCurrency(getValue(r), currency)}
@@ -437,7 +423,7 @@ function ChartTab({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground font-medium">Monthly cost</p>
+      <p className="text-xs text-muted-foreground font-medium">Monthly cost comparison</p>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
           data={chartData}
@@ -481,8 +467,29 @@ function ChartTab({
         </BarChart>
       </ResponsiveContainer>
 
+      {/* Cost per km comparison */}
       {sorted.length > 1 && (
-        <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
+        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+          <p className="text-xs text-muted-foreground font-medium">Cost per km</p>
+          <div className="space-y-1.5">
+            {sorted.map((r, i) => {
+              const isCheapest = i === 0;
+              return (
+                <div key={r.id} className="flex justify-between text-xs">
+                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
+                  <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
+                    {formatCurrency(r.costPerKm, currency)}/km
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Total ownership cost bars */}
+      {sorted.length > 1 && (
+        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
           <p className="text-xs text-muted-foreground font-medium">Total ownership cost</p>
           <div className="space-y-2">
             {sorted.map((r, i) => {

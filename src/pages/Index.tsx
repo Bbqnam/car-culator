@@ -34,6 +34,16 @@ const Index = () => {
     setCars((prev) => [...prev, createEmptyCar(String(nextId.current++))]);
   };
 
+  const duplicateCar = (id: string) => {
+    if (cars.length >= 6) return;
+    setCars((prev) => {
+      const source = prev.find((c) => c.id === id);
+      if (!source) return prev;
+      const newId = String(nextId.current++);
+      return [...prev, { ...source, id: newId }];
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -93,8 +103,10 @@ const Index = () => {
                   car={car}
                   index={i}
                   canRemove={cars.length > 1}
+                  canDuplicate={cars.length < 6}
                   onChange={(updated) => updateCar(car.id, updated)}
                   onRemove={() => removeCar(car.id)}
+                  onDuplicate={() => duplicateCar(car.id)}
                 />
               ))}
             </div>
@@ -116,6 +128,13 @@ const Index = () => {
                   Select a brand and model on the left to see cost comparison
                 </p>
               </div>
+            )}
+
+            {/* EUR disclaimer */}
+            {currency === "EUR" && (
+              <p className="text-[10px] text-muted-foreground text-center mt-3">
+                EUR values use an approximate fixed rate (1 SEK ≈ 0.088 EUR). Actual rates may differ.
+              </p>
             )}
           </div>
         </div>
