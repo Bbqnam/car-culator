@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
+import { getBrandLogo } from "@/lib/brand-logos";
 import {
   BarChart,
   Bar,
@@ -431,15 +432,66 @@ function BreakdownTab({
 
 type ChartViewMode = "monthly" | "total";
 
+// Custom YAxis tick that renders a brand logo + truncated name
+function CarYAxisTick({
+  x, y, payload, carMap,
+}: {
+  x?: number; y?: number; payload?: { value: string };
+  carMap: Map<string, CarResult>;
+}) {
+  if (!payload || x === undefined || y === undefined) return null;
+  const car = carMap.get(payload.value);
+  const logo = car?.brand ? getBrandLogo(car.brand) : null;
+  const label = payload.value;
+
+  return (
+    <foreignObject x={x - 112} y={y - 10} width={108} height={20}>
+      <div
+        // @ts-ignore — xmlns required for SVG foreignObject
+        xmlns="http://www.w3.org/1999/xhtml"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          justifyContent: "flex-end",
+          height: "20px",
+          overflow: "hidden",
+        }}
+      >
+        {logo && (
+          <img
+            src={logo}
+            alt=""
+            style={{ width: 14, height: 14, objectFit: "contain", flexShrink: 0 }}
+          />
+        )}
+        <span
+          style={{
+            fontSize: 11,
+            color: "hsl(220,8%,50%)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxWidth: logo ? 82 : 100,
+          }}
+        >
+          {label}
+        </span>
+      </div>
+    </foreignObject>
+  );
+}
+
+// Summary bar row with optional brand logo
 function MetricBar({
-  label,
+  car,
   value,
   maxValue,
   isWinner,
   currency,
   suffix = "",
 }: {
-  label: string;
+  car: CarResult;
   value: number;
   maxValue: number;
   isWinner: boolean;
@@ -447,11 +499,18 @@ function MetricBar({
   suffix?: string;
 }) {
   const pct = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  const logo = car.brand ? getBrandLogo(car.brand) : null;
+
   return (
     <div>
-      <div className="flex justify-between text-xs mb-0.5">
-        <span className="text-muted-foreground truncate max-w-[60%]">{label}</span>
-        <span className={`font-semibold tabular-nums ${isWinner ? "text-highlight" : "text-foreground"}`}>
+      <div className="flex items-center justify-between text-xs mb-0.5 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {logo && (
+            <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0 opacity-80" />
+          )}
+          <span className="text-muted-foreground truncate">{car.name}</span>
+        </div>
+        <span className={`font-semibold tabular-nums shrink-0 ${isWinner ? "text-highlight" : "text-foreground"}`}>
           {formatCurrency(value, currency)}{suffix}
         </span>
       </div>
@@ -479,14 +538,15 @@ function ChartTab({
   const winner = sorted[0];
   const isMulti = sorted.length > 1;
 
-  // Slicer state: set of visible car IDs in the main graph. Winner always included.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set([winner.id]));
+  // Default: all cars selected
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(sorted.map((r) => r.id))
+  );
   const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
-  const [lowerExpanded, setLowerExpanded] = useState(false);
 
-  // Keep winner always selected; toggle others
+  // Winner is always pinned; toggle others
   const toggleCar = (id: string) => {
-    if (id === winner.id) return; // winner is pinned
+    if (id === winner.id) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -498,10 +558,10 @@ function ChartTab({
     });
   };
 
-  // Cars visible in the main graph, in sorted order, max 4
-  const visibleCars = sorted.filter((r) => selectedIds.has(r.id)).slice(0, 4);
+  // Visible cars in sorted order — used for both graph and summary
+  const visibleCars = sorted.filter((r) => selectedIds.has(r.id));
 
-  // Only show legend rows used by currently visible cars
+  // Legend: only rows with data in currently visible cars
   const visibleStackableRows = activeRows.filter((row) =>
     visibleCars.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
   );
@@ -511,11 +571,12 @@ function ChartTab({
     return totalVal / Math.max(1, r.ownershipMonths);
   };
 
-  // Build recharts data: one entry per visible car
+  // Map name → CarResult for the custom Y-axis tick
+  const carByName = new Map<string, CarResult>();
   const chartData = visibleCars.map((r) => {
-    const entry: Record<string, number | string> = {
-      name: r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name,
-    };
+    const label = r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name;
+    carByName.set(label, r);
+    const entry: Record<string, number | string> = { name: label };
     visibleStackableRows.forEach((row) => {
       const raw = (r.breakdown as any)?.[row.key] ?? 0;
       entry[row.key] = raw > 0 ? Number(scaleValue(raw, r)) : 0;
@@ -523,14 +584,12 @@ function ChartTab({
     return entry;
   });
 
-  const chartHeight = Math.max(visibleCars.length * 52, 60);
+  const chartHeight = Math.max(visibleCars.length * 52, 56);
 
-  // Lower sections: all-cars max for proportional bars
+  // Summary uses max across all sorted cars (not just visible) so bars stay proportional
   const maxMonthlyAll = Math.max(...sorted.map((r) => r.monthlyCost), 1);
   const maxPerKmAll = Math.max(...sorted.map((r) => r.costPerKm), 1);
   const maxTotalAll = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
-
-  const lowerCars = lowerExpanded ? sorted : [winner];
 
   return (
     <div className="space-y-4">
@@ -563,37 +622,41 @@ function ChartTab({
         </div>
       </div>
 
-      {/* ── Slicer chips (only when multiple cars) ── */}
+      {/* ── Slicer chips — only when multiple cars ── */}
       {isMulti && (
         <div className="flex flex-wrap gap-1.5">
           {sorted.map((car) => {
             const isSelected = selectedIds.has(car.id);
             const isWinnerCar = car.id === winner.id;
+            const logo = car.brand ? getBrandLogo(car.brand) : null;
             return (
               <button
                 key={car.id}
                 type="button"
                 onClick={() => toggleCar(car.id)}
+                title={isWinnerCar ? "Best value — always visible" : isSelected ? "Click to hide" : "Click to show"}
                 className={[
-                  "px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150 select-none",
+                  "flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150 select-none",
                   isSelected
                     ? isWinnerCar
-                      ? "bg-highlight text-white ring-1 ring-highlight/50 cursor-default"
-                      : "bg-foreground text-background ring-1 ring-foreground/20"
-                    : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 border border-border/40",
+                      ? "bg-highlight/15 text-highlight border border-highlight/30 cursor-default"
+                      : "bg-foreground/8 text-foreground border border-foreground/20 hover:border-foreground/40"
+                    : "bg-transparent text-muted-foreground border border-border/40 hover:text-foreground hover:border-border/70 opacity-50 hover:opacity-75",
                 ].join(" ")}
               >
-                {car.name.length > 18 ? car.name.slice(0, 16) + "…" : car.name}
-                {isWinnerCar && (
-                  <span className="ml-1 opacity-70 text-[9px] uppercase tracking-wider">★</span>
-                )}
+                {logo
+                  ? <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />
+                  : <span className="w-3.5 h-3.5 rounded-full bg-muted flex items-center justify-center text-[7px] font-bold text-muted-foreground shrink-0">{car.brand?.slice(0, 1) ?? "?"}</span>
+                }
+                <span className="truncate max-w-[120px]">{car.name}</span>
+                {isWinnerCar && <span className="ml-0.5 text-highlight text-[9px]">★</span>}
               </button>
             );
           })}
         </div>
       )}
 
-      {/* ── Compact legend ── */}
+      {/* ── Compact legend — only active categories in visible cars ── */}
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {visibleStackableRows.map((row) => (
           <div key={row.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -603,21 +666,21 @@ function ChartTab({
         ))}
       </div>
 
-      {/* ── Single stacked bar chart ── */}
-      <div className="rounded-xl border border-border/60 bg-background/50 px-3 pt-3 pb-2">
+      {/* ── Stacked bar chart ── */}
+      <div className="rounded-xl border border-border/60 bg-background/50 px-2 pt-3 pb-2">
         <ResponsiveContainer width="100%" height={chartHeight}>
           <BarChart
             data={chartData}
             layout="vertical"
-            margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
-            barCategoryGap={14}
+            margin={{ top: 2, right: 12, left: 4, bottom: 2 }}
+            barCategoryGap={12}
           >
             <XAxis type="number" hide />
             <YAxis
               type="category"
               dataKey="name"
-              width={100}
-              tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
+              width={116}
+              tick={(props) => <CarYAxisTick {...props} carMap={carByName} />}
               axisLine={false}
               tickLine={false}
             />
@@ -653,87 +716,41 @@ function ChartTab({
         </ResponsiveContainer>
       </div>
 
-      {/* ── Lower metric sections: winner only by default, expand to reveal all ── */}
-      <div className="space-y-3 pt-0.5">
-
-        {/* Section header with expand toggle */}
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+      {/* ── Summary — mirrors slicer selection ── */}
+      {isMulti && (
+        <div className="space-y-3 border-t border-border/40 pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
             Summary
           </p>
-          {isMulti && (
-            <button
-              type="button"
-              onClick={() => setLowerExpanded((v) => !v)}
-              className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {lowerExpanded ? "Show less ▲" : `Show all ${sorted.length} cars ▼`}
-            </button>
-          )}
-        </div>
 
-        {/* Monthly */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+          <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground font-medium">Monthly</p>
-            {isMulti && !lowerExpanded && (
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                <span className="font-semibold text-highlight">{formatCurrency(winner.monthlyCost, currency)}</span>
-                <span className="text-muted-foreground/60"> / best</span>
-              </span>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            {lowerCars.map((r, i) => (
-              <MetricBar
-                key={r.id}
-                label={r.name}
-                value={r.monthlyCost}
-                maxValue={maxMonthlyAll}
-                isWinner={i === 0}
-                currency={currency}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Per km */}
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground font-medium">Per km</p>
-          <div className="space-y-1.5">
-            {lowerCars.map((r, i) => (
-              <MetricBar
-                key={r.id}
-                label={r.name}
-                value={r.costPerKm}
-                maxValue={maxPerKmAll}
-                isWinner={i === 0}
-                currency={currency}
-                suffix="/km"
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Total */}
-        {isMulti && (
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground font-medium">Total</p>
             <div className="space-y-1.5">
-              {lowerCars.map((r, i) => (
-                <MetricBar
-                  key={r.id}
-                  label={r.name}
-                  value={r.totalOwnershipCost}
-                  maxValue={maxTotalAll}
-                  isWinner={i === 0}
-                  currency={currency}
-                />
+              {visibleCars.map((r, i) => (
+                <MetricBar key={r.id} car={r} value={r.monthlyCost} maxValue={maxMonthlyAll} isWinner={i === 0} currency={currency} />
               ))}
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground font-medium">Per km</p>
+            <div className="space-y-1.5">
+              {visibleCars.map((r, i) => (
+                <MetricBar key={r.id} car={r} value={r.costPerKm} maxValue={maxPerKmAll} isWinner={i === 0} currency={currency} suffix="/km" />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground font-medium">Total</p>
+            <div className="space-y-1.5">
+              {visibleCars.map((r, i) => (
+                <MetricBar key={r.id} car={r} value={r.totalOwnershipCost} maxValue={maxTotalAll} isWinner={i === 0} currency={currency} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
