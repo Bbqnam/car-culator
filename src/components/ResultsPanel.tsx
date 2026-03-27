@@ -503,11 +503,44 @@ function SingleCarChart({
   );
 }
 
+function ComparisonBar({
+  label,
+  value,
+  maxValue,
+  isWinner,
+  currency,
+  suffix = "",
+}: {
+  label: string;
+  value: number;
+  maxValue: number;
+  isWinner: boolean;
+  currency: Currency;
+  suffix?: string;
+}) {
+  const pct = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-0.5">
+        <span className="text-muted-foreground truncate max-w-[60%]">{label}</span>
+        <span className={`font-semibold tabular-nums ${isWinner ? "text-highlight" : "text-foreground"}`}>
+          {formatCurrency(value, currency)}{suffix}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: isWinner ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ChartTab({
   sorted,
   activeRows,
   cheapestMonthly,
-  maxMonthly,
   currency,
 }: {
   sorted: CarResult[];
@@ -518,10 +551,22 @@ function ChartTab({
 }) {
   const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
   const [othersExpanded, setOthersExpanded] = useState(false);
+  const [compareId, setCompareId] = useState<string | null>(
+    sorted.length > 1 ? sorted[1].id : null
+  );
   const isMulti = sorted.length > 1;
 
+  const winner = sorted[0];
+  const others = sorted.slice(1);
+
+  // Keep compareId valid when sorted changes
+  const compareCarId = compareId && sorted.find((r) => r.id === compareId) ? compareId : (others[0]?.id ?? null);
+  const compareCar = compareCarId ? sorted.find((r) => r.id === compareCarId) ?? null : null;
+
+  // Active stackable rows across the currently visible cars
+  const visibleCars = compareCar ? [winner, compareCar] : [winner];
   const stackableRows = activeRows.filter((row) =>
-    sorted.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
+    visibleCars.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
   );
 
   const scaleValue = (totalVal: number, r: CarResult) => {
@@ -529,33 +574,29 @@ function ChartTab({
     return totalVal / Math.max(1, r.ownershipMonths);
   };
 
-  const winner = sorted[0];
-  const others = sorted.slice(1);
+  // Comparison metrics between winner and selected car
+  const maxMonthly = Math.max(winner.monthlyCost, compareCar?.monthlyCost ?? 0);
+  const maxPerKm = Math.max(winner.costPerKm, compareCar?.costPerKm ?? 0);
+  const maxTotal = Math.max(winner.totalOwnershipCost, compareCar?.totalOwnershipCost ?? 0);
 
-  const comparisonBase =
-    sorted.length >= 2 ? { cheaper: sorted[0], pricier: sorted[sorted.length - 1] } : null;
+  const monthlyDiff = compareCar ? Math.abs(compareCar.monthlyCost - winner.monthlyCost) : 0;
 
-  const largestDiffs = comparisonBase
+  // Biggest differences between winner and selected compare car
+  const largestDiffs = compareCar
     ? stackableRows
         .map((row) => {
-          const cheaperVal = Number((comparisonBase.cheaper.breakdown as any)?.[row.key] ?? 0);
-          const pricierVal = Number((comparisonBase.pricier.breakdown as any)?.[row.key] ?? 0);
-          const scaledCheaper = scaleValue(cheaperVal, comparisonBase.cheaper);
-          const scaledPricier = scaleValue(pricierVal, comparisonBase.pricier);
-          const diff = scaledPricier - scaledCheaper;
-          return { ...row, diff, cheaperVal: scaledCheaper, pricierVal: scaledPricier };
+          const wVal = scaleValue(Number((winner.breakdown as any)?.[row.key] ?? 0), winner);
+          const cVal = scaleValue(Number((compareCar.breakdown as any)?.[row.key] ?? 0), compareCar);
+          return { ...row, diff: cVal - wVal, wVal, cVal };
         })
         .filter((x) => Math.abs(x.diff) > 0.5)
         .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
         .slice(0, 3)
     : [];
 
-  const maxCostPerKm = Math.max(...sorted.map((r) => r.costPerKm), 1);
-  const maxTotal = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
-
   return (
     <div className="space-y-4">
-      {/* Header / mode toggle */}
+      {/* Header row: mode toggle */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-xs font-semibold text-foreground">Cost composition</p>
         <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
@@ -583,7 +624,7 @@ function ChartTab({
         </div>
       </div>
 
-      {/* Compact legend — only active rows */}
+      {/* Compact legend — only rows used in visible cars */}
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {stackableRows.map((row) => (
           <div key={row.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -610,52 +651,83 @@ function ChartTab({
         />
       </div>
 
-      {/* Others — collapsed by default */}
-      {others.length > 0 && (
+      {/* Compare dropdown + chart (only when multiple cars) */}
+      {isMulti && (
+        <div>
+          {/* Compare selector */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest shrink-0">Compare with</span>
+            <span className="h-px flex-1 bg-border/60" />
+            <select
+              value={compareCarId ?? ""}
+              onChange={(e) => setCompareId(e.target.value)}
+              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-secondary hover:bg-secondary/80 border border-border/40 transition-colors max-w-[180px] truncate"
+            >
+              {others.map((car) => (
+                <option key={car.id} value={car.id}>{car.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Compare car chart */}
+          {compareCar && (
+            <SingleCarChart
+              car={compareCar}
+              stackableRows={stackableRows}
+              scaleValue={scaleValue}
+              currency={currency}
+              isWinner={false}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Show all cars toggle */}
+      {others.length > 1 && (
         <div>
           <button
             type="button"
             onClick={() => setOthersExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-1"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-0.5"
           >
-            <span className="h-px flex-1 bg-border/60" />
-            <span className="font-medium whitespace-nowrap">
-              {othersExpanded
-                ? `Hide other ${others.length === 1 ? "car" : `${others.length} cars`} ▲`
-                : `Compare with ${others.length} other ${others.length === 1 ? "car" : "cars"} ▼`}
+            <span className="h-px flex-1 bg-border/40" />
+            <span className="font-medium whitespace-nowrap text-[11px]">
+              {othersExpanded ? "Hide all cars ▲" : `Show all ${sorted.length} cars ▼`}
             </span>
-            <span className="h-px flex-1 bg-border/60" />
+            <span className="h-px flex-1 bg-border/40" />
           </button>
 
           {othersExpanded && (
             <div className="mt-2 space-y-2">
-              {others.map((car) => (
-                <SingleCarChart
-                  key={car.id}
-                  car={car}
-                  stackableRows={stackableRows}
-                  scaleValue={scaleValue}
-                  currency={currency}
-                  isWinner={false}
-                />
-              ))}
+              {others
+                .filter((car) => car.id !== compareCarId)
+                .map((car) => (
+                  <SingleCarChart
+                    key={car.id}
+                    car={car}
+                    stackableRows={activeRows.filter((row) =>
+                      sorted.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
+                    )}
+                    scaleValue={scaleValue}
+                    currency={currency}
+                    isWinner={false}
+                  />
+                ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Biggest differences */}
+      {/* Biggest differences (winner vs selected) */}
       {largestDiffs.length > 0 && (
         <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-1.5">
           <div className="text-xs font-semibold text-foreground">Biggest differences</div>
           <div className="space-y-1.5">
             {largestDiffs.map((item) => {
-              const moreExpensiveName = comparisonBase?.pricier.name ?? "Pricier option";
-              const cheaperName = comparisonBase?.cheaper.name ?? "Cheaper option";
               const diffText =
                 item.diff > 0
-                  ? `${moreExpensiveName} spends ${formatCurrency(item.diff, currency)} more on ${item.label.toLowerCase()}`
-                  : `${cheaperName} spends ${formatCurrency(Math.abs(item.diff), currency)} more on ${item.label.toLowerCase()}`;
+                  ? `${compareCar!.name} spends ${formatCurrency(item.diff, currency)} more on ${item.label.toLowerCase()}`
+                  : `${winner.name} spends ${formatCurrency(Math.abs(item.diff), currency)} more on ${item.label.toLowerCase()}`;
               return (
                 <div key={item.key} className="flex items-start gap-2 text-[11px]">
                   <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: item.color }} />
@@ -667,98 +739,44 @@ function ChartTab({
         </div>
       )}
 
-      {/* Monthly summary comparison */}
-      <div className="space-y-1.5 pt-0.5">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground font-medium">Monthly</p>
-          {isMulti && (
-            <span className="text-[11px] text-muted-foreground">
-              Difference:{" "}
-              <span className="font-semibold text-highlight">
-                {formatCurrency(maxMonthly - cheapestMonthly, currency)}/mo
+      {/* ── Focused comparison bars: winner vs selected only ── */}
+      <div className="space-y-3 pt-0.5">
+        {/* Monthly */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground font-medium">Monthly</p>
+            {compareCar && (
+              <span className="text-[11px] text-muted-foreground">
+                Δ <span className="font-semibold text-highlight">{formatCurrency(monthlyDiff, currency)}/mo</span>
               </span>
-            </span>
+            )}
+          </div>
+          <ComparisonBar label={winner.name} value={winner.monthlyCost} maxValue={maxMonthly} isWinner={true} currency={currency} />
+          {compareCar && (
+            <ComparisonBar label={compareCar.name} value={compareCar.monthlyCost} maxValue={maxMonthly} isWinner={false} currency={currency} />
           )}
         </div>
-        <div className="space-y-1.5">
-          {sorted.map((r, i) => {
-            const pct = maxMonthly > 0 ? (r.monthlyCost / maxMonthly) * 100 : 0;
-            const isCheapest = i === 0 && isMulti;
-            return (
-              <div key={r.id}>
-                <div className="flex justify-between text-xs mb-0.5">
-                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                  <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
-                    {formatCurrency(r.monthlyCost, currency)}
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${pct}%`, background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Cost per km */}
-      <div className="space-y-1.5 pt-0.5">
-        <p className="text-xs text-muted-foreground font-medium">Per km</p>
+        {/* Per km */}
         <div className="space-y-1.5">
-          {sorted.map((r, i) => {
-            const width = (r.costPerKm / maxCostPerKm) * 100;
-            const isBest = i === 0 && isMulti;
-            return (
-              <div key={r.id}>
-                <div className="flex justify-between text-xs mb-0.5">
-                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                  <span className={`font-semibold tabular-nums ${isBest ? "text-highlight" : "text-foreground"}`}>
-                    {formatCurrency(r.costPerKm, currency)}/km
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${width}%`, background: isBest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+          <p className="text-xs text-muted-foreground font-medium">Per km</p>
+          <ComparisonBar label={winner.name} value={winner.costPerKm} maxValue={maxPerKm} isWinner={true} currency={currency} suffix="/km" />
+          {compareCar && (
+            <ComparisonBar label={compareCar.name} value={compareCar.costPerKm} maxValue={maxPerKm} isWinner={false} currency={currency} suffix="/km" />
+          )}
         </div>
-      </div>
 
-      {/* Total ownership cost */}
-      {isMulti && (
-        <div className="space-y-1.5 pt-0.5">
-          <p className="text-xs text-muted-foreground font-medium">Total</p>
+        {/* Total */}
+        {isMulti && (
           <div className="space-y-1.5">
-            {sorted.map((r, i) => {
-              const pct = maxTotal > 0 ? (r.totalOwnershipCost / maxTotal) * 100 : 0;
-              const isCheapest = i === 0;
-              return (
-                <div key={r.id}>
-                  <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                    <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
-                      {formatCurrency(r.totalOwnershipCost, currency)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            <p className="text-xs text-muted-foreground font-medium">Total</p>
+            <ComparisonBar label={winner.name} value={winner.totalOwnershipCost} maxValue={maxTotal} isWinner={true} currency={currency} />
+            {compareCar && (
+              <ComparisonBar label={compareCar.name} value={compareCar.totalOwnershipCost} maxValue={maxTotal} isWinner={false} currency={currency} />
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
