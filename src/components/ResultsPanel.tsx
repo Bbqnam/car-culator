@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
 import { getBrandLogo } from "@/lib/brand-logos";
 import {
@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { Lightbulb } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
 
@@ -18,6 +19,7 @@ interface ResultsPanelProps {
 }
 
 type Tab = "overview" | "breakdown" | "chart";
+type BreakdownRowKey = keyof CarResult["breakdown"];
 
 const FINANCING_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -25,7 +27,7 @@ const FINANCING_LABELS: Record<string, string> = {
   leasing: "Lease",
 };
 
-const BREAKDOWN_ROWS: { key: string; label: string; color: string }[] = [
+const BREAKDOWN_ROWS: { key: BreakdownRowKey; label: string; color: string }[] = [
   { key: "depreciation", label: "Depreciation", color: "hsl(220,14%,40%)" },
   { key: "financingCost", label: "Financing", color: "hsl(0,65%,55%)" },
   { key: "leaseCost", label: "Lease payments", color: "hsl(200,60%,50%)" },
@@ -54,39 +56,38 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
   }));
 
   const sorted = [...resultsWithVerdicts].sort((a, b) => a.monthlyCost - b.monthlyCost);
-  const cheapestMonthly = sorted[0]?.monthlyCost ?? 0;
-  const maxMonthly = sorted[sorted.length - 1]?.monthlyCost ?? 0;
-
   const activeRows = BREAKDOWN_ROWS.filter((r) =>
-    sorted.some((car) => ((car.breakdown as any)?.[r.key] ?? 0) > 0)
+    sorted.some((car) => (car.breakdown[r.key] ?? 0) > 0)
   );
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
       {/* Tab bar */}
       <div className="flex border-b border-border/60 bg-secondary/30">
-        {(["overview", "breakdown", "chart"] as Tab[]).map((t) => (
+        {([
+          { key: "overview" as Tab, label: "Results" },
+          { key: "breakdown" as Tab, label: "Breakdown" },
+          { key: "chart" as Tab, label: "Chart" },
+        ]).map((item) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-3 text-xs font-semibold uppercase tracking-widest transition-colors ${
-              tab === t
+            key={item.key}
+            onClick={() => setTab(item.key)}
+            className={`flex-1 py-3 text-[11px] sm:text-xs font-semibold uppercase tracking-widest transition-colors ${
+              tab === item.key
                 ? "text-foreground border-b-2 border-foreground -mb-px bg-card"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t}
+            {item.label}
           </button>
         ))}
       </div>
 
-      <div className="p-4 sm:p-5">
+      <div className="p-4 sm:p-5 lg:p-6">
         {tab === "overview" && (
           <OverviewTab
             sorted={sorted}
-            cheapestMonthly={cheapestMonthly}
             currency={currency}
-            results={results}
           />
         )}
         {tab === "breakdown" && (
@@ -96,8 +97,6 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
           <ChartTab
             sorted={sorted}
             activeRows={activeRows}
-            cheapestMonthly={cheapestMonthly}
-            maxMonthly={maxMonthly}
             currency={currency}
           />
         )}
@@ -110,19 +109,18 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
 
 function OverviewTab({
   sorted,
-  cheapestMonthly,
   currency,
-  results,
 }: {
   sorted: (CarResult & { verdict: string })[];
-  cheapestMonthly: number;
   currency: Currency;
-  results: CarResult[];
 }) {
+  const cheapestMonthly = sorted[0]?.monthlyCost ?? 0;
+  const isMulti = sorted.length > 1;
+
   return (
     <div className="space-y-3">
       {sorted.map((result, idx) => {
-        const isCheapest = idx === 0 && results.length > 1;
+        const isCheapest = idx === 0 && isMulti;
         const diff = result.monthlyCost - cheapestMonthly;
 
         return (
@@ -134,7 +132,6 @@ function OverviewTab({
                 : "bg-background border-border/60"
             }`}
           >
-            {/* Top row: identity + monthly cost */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {result.brand && <BrandLogo brand={result.brand} size="md" />}
@@ -154,7 +151,6 @@ function OverviewTab({
                 </div>
               </div>
 
-              {/* Monthly cost — the hero number */}
               <div className="text-right shrink-0">
                 <div className="text-2xl font-bold tracking-tight tabular-nums">
                   {formatCurrency(result.monthlyCost, currency)}
@@ -163,8 +159,10 @@ function OverviewTab({
               </div>
             </div>
 
-            {/* Secondary stats row */}
-            <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-4 gap-2">
+            <div
+              className="mt-3 pt-3 border-t border-border/50 grid gap-x-2.5 gap-y-2"
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
+            >
               <MiniStat
                 label="Total"
                 value={formatCurrency(result.totalOwnershipCost, currency)}
@@ -178,29 +176,45 @@ function OverviewTab({
                 value={formatCurrency(result.costPerKm, currency)}
               />
               <MiniStat
-                label={diff > 0 && results.length > 1 ? "vs cheapest" : "Residual"}
+                label={diff > 0 && isMulti ? "vs cheapest" : "Residual"}
                 value={
-                  diff > 0 && results.length > 1
+                  diff > 0 && isMulti
                     ? `+${formatCurrency(diff, currency)}/mo`
                     : result.residualValuePercent > 0
                     ? `${result.residualValuePercent}%`
                     : "—"
                 }
-                accent={diff > 0 && results.length > 1 ? "negative" : undefined}
+                accent={diff > 0 && isMulti ? "negative" : undefined}
               />
             </div>
 
-            {/* Verdict */}
             {result.verdict && (
-              <p className="mt-2 text-[11px] text-muted-foreground italic">
-                💡 {result.verdict}
-              </p>
+              <div
+                className={[
+                  "mt-2 rounded-lg border px-2.5 py-1.5 flex items-center gap-2 transition-colors",
+                  isCheapest
+                    ? "border-highlight/35 bg-highlight/10"
+                    : "border-border/60 bg-secondary/30",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "shrink-0 rounded-full p-1",
+                    isCheapest ? "bg-highlight/20 text-highlight" : "bg-secondary text-muted-foreground",
+                  ].join(" ")}
+                >
+                  <Lightbulb className="w-3.5 h-3.5 animate-pulse" />
+                </span>
+                <p className="text-[11px] leading-relaxed text-foreground/90 italic">
+                  {result.verdict}
+                </p>
+              </div>
             )}
           </div>
         );
       })}
 
-      {sorted.length > 1 && (
+      {isMulti && (
         <div className="text-center text-xs text-muted-foreground pt-1">
           Choosing the cheapest option saves{" "}
           <span className="font-semibold text-highlight">
@@ -226,10 +240,10 @@ function MiniStat({
   accent?: "negative";
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="text-[10px] text-muted-foreground mb-0.5">{label}</div>
       <div
-        className={`text-xs font-semibold tabular-nums ${
+        className={`text-xs font-semibold tabular-nums leading-tight whitespace-nowrap ${
           accent === "negative" ? "text-destructive" : "text-foreground"
         }`}
       >
@@ -316,7 +330,7 @@ function BreakdownTab({
           <tbody>
             {activeRows.map((row) => {
               const scaledValues = sorted.map((r) => {
-                const total = (r.breakdown as any)[row.key] as number;
+                const total = r.breakdown[row.key];
                 return total > 0 ? Math.round(scale(total, r)) : 0;
               });
               const nonZero = scaledValues.filter((v) => v > 0);
@@ -437,24 +451,22 @@ function CarYAxisTick({
   x, y, payload, carMap,
 }: {
   x?: number; y?: number; payload?: { value: string };
-  carMap: Map<string, CarResult>;
+  carMap: Map<string, { car: CarResult; label: string }>;
 }) {
   if (!payload || x === undefined || y === undefined) return null;
-  const car = carMap.get(payload.value);
-  const logo = car?.brand ? getBrandLogo(car.brand) : null;
-  const label = payload.value;
+  const meta = carMap.get(payload.value);
+  const logo = meta?.car.brand ? getBrandLogo(meta.car.brand) : null;
+  const label = meta?.label ?? "Unnamed car";
 
   return (
-    <foreignObject x={x - 112} y={y - 10} width={108} height={20}>
+    <foreignObject x={x - 156} y={y - 12} width={152} height={24}>
       <div
-        // @ts-ignore — xmlns required for SVG foreignObject
-        xmlns="http://www.w3.org/1999/xhtml"
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "5px",
+          gap: "6px",
           justifyContent: "flex-end",
-          height: "20px",
+          height: "24px",
           overflow: "hidden",
         }}
       >
@@ -462,17 +474,18 @@ function CarYAxisTick({
           <img
             src={logo}
             alt=""
-            style={{ width: 14, height: 14, objectFit: "contain", flexShrink: 0 }}
+            style={{ width: 16, height: 16, objectFit: "contain", flexShrink: 0 }}
           />
         )}
         <span
           style={{
-            fontSize: 11,
-            color: "hsl(220,8%,50%)",
+            fontSize: 13,
+            fontWeight: 500,
+            color: "hsl(220,10%,42%)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            maxWidth: logo ? 82 : 100,
+            maxWidth: logo ? 126 : 144,
           }}
         >
           {label}
@@ -485,6 +498,7 @@ function CarYAxisTick({
 // Summary bar row with optional brand logo
 function MetricBar({
   car,
+  label,
   value,
   maxValue,
   isWinner,
@@ -492,6 +506,7 @@ function MetricBar({
   suffix = "",
 }: {
   car: CarResult;
+  label: string;
   value: number;
   maxValue: number;
   isWinner: boolean;
@@ -508,7 +523,14 @@ function MetricBar({
           {logo && (
             <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0 opacity-80" />
           )}
-          <span className="text-muted-foreground truncate">{car.name}</span>
+          <span className={`truncate ${isWinner ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
+            {label}
+          </span>
+          {isWinner && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-highlight bg-highlight/10 px-1.5 py-0.5 rounded-full">
+              Best
+            </span>
+          )}
         </div>
         <span className={`font-semibold tabular-nums shrink-0 ${isWinner ? "text-highlight" : "text-foreground"}`}>
           {formatCurrency(value, currency)}{suffix}
@@ -531,39 +553,68 @@ function ChartTab({
 }: {
   sorted: CarResult[];
   activeRows: typeof BREAKDOWN_ROWS;
-  cheapestMonthly: number;
-  maxMonthly: number;
   currency: Currency;
 }) {
-  const winner = sorted[0];
-  const isMulti = sorted.length > 1;
-
-  // Default: all cars selected
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(sorted.map((r) => r.id))
+  const chartCars = useMemo(
+    () =>
+      sorted.map((car, index) => ({
+        ...car,
+        entryKey: `${car.id}::${index}`,
+        displayName: (car.name || "Unnamed car").trim() || "Unnamed car",
+      })),
+    [sorted]
   );
-  const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
 
-  // Winner is always pinned; toggle others
-  const toggleCar = (id: string) => {
-    if (id === winner.id) return;
-    setSelectedIds((prev) => {
+  const winner = chartCars[0];
+  const isMulti = sorted.length > 1;
+  const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [selectedEntryKeys, setSelectedEntryKeys] = useState<Set<string>>(
+    () => new Set(chartCars.map((car) => car.entryKey))
+  );
+
+  useEffect(() => {
+    setSelectedEntryKeys((prev) => {
+      const next = new Set<string>();
+
+      chartCars.forEach((car) => {
+        if (prev.has(car.entryKey)) next.add(car.entryKey);
+      });
+
+      chartCars.forEach((car) => {
+        if (!prev.has(car.entryKey)) next.add(car.entryKey);
+      });
+
+      if (next.size === 0 && chartCars[0]) next.add(chartCars[0].entryKey);
+      return next;
+    });
+  }, [chartCars]);
+
+  const toggleEntry = (entryKey: string) => {
+    setSelectedEntryKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+      if (next.has(entryKey)) {
+        if (next.size === 1) return prev;
+        next.delete(entryKey);
       } else {
-        next.add(id);
+        next.add(entryKey);
       }
       return next;
     });
   };
 
-  // Visible cars in sorted order — used for both graph and summary
-  const visibleCars = sorted.filter((r) => selectedIds.has(r.id));
+  // Graph uses slicer-selected cars.
+  const visibleCars = chartCars.filter((car) => selectedEntryKeys.has(car.entryKey));
+  const allCarsSelected = chartCars.length > 0 && selectedEntryKeys.size === chartCars.length;
+  // Summary follows slicer selection:
+  // - collapsed: best among currently visible cars
+  // - expanded: all currently visible cars
+  const summaryLeadCar = visibleCars[0] ?? winner;
+  const summaryCars = isSummaryExpanded ? visibleCars : summaryLeadCar ? [summaryLeadCar] : [];
 
   // Legend: only rows with data in currently visible cars
   const visibleStackableRows = activeRows.filter((row) =>
-    visibleCars.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
+    visibleCars.some((r) => (r.breakdown[row.key] ?? 0) > 0)
   );
 
   const scaleValue = (totalVal: number, r: CarResult) => {
@@ -571,14 +622,14 @@ function ChartTab({
     return totalVal / Math.max(1, r.ownershipMonths);
   };
 
-  // Map name → CarResult for the custom Y-axis tick
-  const carByName = new Map<string, CarResult>();
+  // Map unique row key → car metadata for stable Y-axis labels.
+  const carByEntryKey = new Map<string, { car: CarResult; label: string }>();
   const chartData = visibleCars.map((r) => {
-    const label = r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name;
-    carByName.set(label, r);
-    const entry: Record<string, number | string> = { name: label };
+    const label = r.displayName.length > 24 ? r.displayName.slice(0, 22) + "…" : r.displayName;
+    carByEntryKey.set(r.entryKey, { car: r, label });
+    const entry: Record<string, number | string> = { entryKey: r.entryKey };
     visibleStackableRows.forEach((row) => {
-      const raw = (r.breakdown as any)?.[row.key] ?? 0;
+      const raw = r.breakdown[row.key] ?? 0;
       entry[row.key] = raw > 0 ? Number(scaleValue(raw, r)) : 0;
     });
     return entry;
@@ -592,7 +643,7 @@ function ChartTab({
   const maxTotalAll = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
 
       {/* ── Mode toggle ── */}
       <div className="flex items-center justify-between gap-3">
@@ -622,33 +673,46 @@ function ChartTab({
         </div>
       </div>
 
-      {/* ── Slicer chips — only when multiple cars ── */}
+      {/* ── Graph slicer chips ── */}
       {isMulti && (
         <div className="flex flex-wrap gap-1.5">
-          {sorted.map((car) => {
-            const isSelected = selectedIds.has(car.id);
-            const isWinnerCar = car.id === winner.id;
+          <button
+            type="button"
+            onClick={() => setSelectedEntryKeys(new Set(chartCars.map((car) => car.entryKey)))}
+            disabled={allCarsSelected}
+            className={[
+              "px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors",
+              allCarsSelected
+                ? "bg-secondary/60 text-muted-foreground border-border/50 cursor-not-allowed"
+                : "bg-card text-foreground border-border/70 hover:border-border hover:bg-secondary/40",
+            ].join(" ")}
+          >
+            {allCarsSelected ? "All cars shown" : "Show all cars"}
+          </button>
+
+          {chartCars.map((car) => {
+            const isSelected = selectedEntryKeys.has(car.entryKey);
+            const isWinnerCar = winner?.entryKey === car.entryKey;
             const logo = car.brand ? getBrandLogo(car.brand) : null;
             return (
               <button
-                key={car.id}
+                key={car.entryKey}
                 type="button"
-                onClick={() => toggleCar(car.id)}
-                title={isWinnerCar ? "Best value — always visible" : isSelected ? "Click to hide" : "Click to show"}
+                onClick={() => toggleEntry(car.entryKey)}
                 className={[
-                  "flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150 select-none",
+                  "flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full text-[11px] font-medium border transition-all duration-150 select-none",
                   isSelected
                     ? isWinnerCar
-                      ? "bg-highlight/15 text-highlight border border-highlight/30 cursor-default"
+                      ? "bg-highlight/15 text-highlight border border-highlight/30"
                       : "bg-foreground/8 text-foreground border border-foreground/20 hover:border-foreground/40"
-                    : "bg-transparent text-muted-foreground border border-border/40 hover:text-foreground hover:border-border/70 opacity-50 hover:opacity-75",
+                    : "bg-transparent text-muted-foreground border border-border/40 hover:text-foreground hover:border-border/70 opacity-60 hover:opacity-90",
                 ].join(" ")}
               >
                 {logo
                   ? <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />
                   : <span className="w-3.5 h-3.5 rounded-full bg-muted flex items-center justify-center text-[7px] font-bold text-muted-foreground shrink-0">{car.brand?.slice(0, 1) ?? "?"}</span>
                 }
-                <span className="truncate max-w-[120px]">{car.name}</span>
+                <span className="truncate max-w-[120px]">{car.displayName}</span>
                 {isWinnerCar && <span className="ml-0.5 text-highlight text-[9px]">★</span>}
               </button>
             );
@@ -678,9 +742,9 @@ function ChartTab({
             <XAxis type="number" hide />
             <YAxis
               type="category"
-              dataKey="name"
-              width={116}
-              tick={(props) => <CarYAxisTick {...props} carMap={carByName} />}
+              dataKey="entryKey"
+              width={160}
+              tick={(props) => <CarYAxisTick {...props} carMap={carByEntryKey} />}
               axisLine={false}
               tickLine={false}
             />
@@ -716,36 +780,75 @@ function ChartTab({
         </ResponsiveContainer>
       </div>
 
-      {/* ── Summary — mirrors slicer selection ── */}
-      {isMulti && (
-        <div className="space-y-3 border-t border-border/40 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-            Summary
-          </p>
+      {/* ── Summary ── */}
+      {isMulti && summaryLeadCar && (
+        <div className="space-y-2.5 border-t border-border/40 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+              Summary
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsSummaryExpanded((v) => !v)}
+              disabled={visibleCars.length <= 1}
+              className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              {visibleCars.length <= 1
+                ? "Only one selected"
+                : isSummaryExpanded
+                ? "Winner only ▴"
+                : "Show more ▾"}
+            </button>
+          </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground font-medium">Monthly</p>
+            <p className="text-[11px] text-muted-foreground font-medium">Monthly</p>
             <div className="space-y-1.5">
-              {visibleCars.map((r, i) => (
-                <MetricBar key={r.id} car={r} value={r.monthlyCost} maxValue={maxMonthlyAll} isWinner={i === 0} currency={currency} />
+              {summaryCars.map((r) => (
+                <MetricBar
+                  key={`monthly-${r.entryKey}`}
+                  car={r}
+                  label={r.displayName}
+                  value={r.monthlyCost}
+                  maxValue={maxMonthlyAll}
+                  isWinner={r.entryKey === winner?.entryKey}
+                  currency={currency}
+                />
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground font-medium">Per km</p>
+            <p className="text-[11px] text-muted-foreground font-medium">Per km</p>
             <div className="space-y-1.5">
-              {visibleCars.map((r, i) => (
-                <MetricBar key={r.id} car={r} value={r.costPerKm} maxValue={maxPerKmAll} isWinner={i === 0} currency={currency} suffix="/km" />
+              {summaryCars.map((r) => (
+                <MetricBar
+                  key={`perkm-${r.entryKey}`}
+                  car={r}
+                  label={r.displayName}
+                  value={r.costPerKm}
+                  maxValue={maxPerKmAll}
+                  isWinner={r.entryKey === winner?.entryKey}
+                  currency={currency}
+                  suffix="/km"
+                />
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground font-medium">Total</p>
+            <p className="text-[11px] text-muted-foreground font-medium">Total</p>
             <div className="space-y-1.5">
-              {visibleCars.map((r, i) => (
-                <MetricBar key={r.id} car={r} value={r.totalOwnershipCost} maxValue={maxTotalAll} isWinner={i === 0} currency={currency} />
+              {summaryCars.map((r) => (
+                <MetricBar
+                  key={`total-${r.entryKey}`}
+                  car={r}
+                  label={r.displayName}
+                  value={r.totalOwnershipCost}
+                  maxValue={maxTotalAll}
+                  isWinner={r.entryKey === winner?.entryKey}
+                  currency={currency}
+                />
               ))}
             </div>
           </div>

@@ -67,38 +67,40 @@ export function NumericInput({
   const isEmpty = value === 0;
   const showRequired = required && isEmpty;
   const displayValue = editing ? raw : formatDisplay(value, step);
+  const resolvedPlaceholder = placeholder ?? (required ? "" : "0");
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between min-h-[16px]">
-        <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
-        {showRequired && (
-          <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide">
-            Required
-          </span>
-        )}
+      <div className="flex items-start justify-between min-h-[16px]">
+        <Label className="text-[11px] text-muted-foreground font-medium leading-tight">
+          {label}
+          {required && <span className="ml-1 text-amber-500">*</span>}
+        </Label>
       </div>
-      <div className="relative">
+      <div
+        className={[
+          "flex min-h-[2.25rem] h-auto w-full overflow-hidden rounded-md bg-white transition-all",
+          showRequired
+            ? "border border-amber-300 ring-1 ring-amber-100"
+            : "border border-border/60 hover:border-border/90 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/10",
+        ].join(" ")}
+      >
         <input
           ref={inputRef}
           type="text"
           inputMode="decimal"
           value={displayValue}
-          placeholder={placeholder ?? (required ? "Enter value…" : "0")}
+          placeholder={resolvedPlaceholder}
           onFocus={handleFocus}
           onBlur={handleBlur}
           onChange={handleChange}
           className={[
-            "flex h-9 w-full rounded-md px-3 py-2 text-sm transition-all outline-none",
-            unit ? "pr-12" : "pr-3",
-            "bg-white",
-            showRequired
-              ? "border border-amber-300 ring-1 ring-amber-100 placeholder:text-amber-400/50"
-              : "border border-border/60 hover:border-border/90 focus:border-ring focus:ring-2 focus:ring-ring/10 placeholder:text-muted-foreground/35",
+            "h-full w-full min-w-0 bg-transparent px-3 py-2 text-sm outline-none",
+            showRequired ? "placeholder:text-amber-400/60" : "placeholder:text-muted-foreground/35",
           ].join(" ")}
         />
         {unit && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground/55 pointer-events-none select-none">
+          <span className="shrink-0 border-l border-border/50 px-2 text-[11px] text-muted-foreground/65 inline-flex items-center whitespace-nowrap">
             {unit}
           </span>
         )}
@@ -122,7 +124,7 @@ export function ReadonlyField({
   return (
     <div className="space-y-1">
       <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
-      <div className="h-9 flex items-center justify-between px-3 rounded-md bg-secondary/40 border border-border/40">
+      <div className="min-h-[2.25rem] h-auto py-2 flex items-center justify-between px-3 rounded-md bg-secondary/40 border border-border/40">
         <span className="text-sm font-medium text-foreground">{value}</span>
         {unit && (
           <span className="text-[11px] text-muted-foreground/60">{unit}</span>

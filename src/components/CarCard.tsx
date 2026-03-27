@@ -34,6 +34,8 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemove, onDuplicate }: CarCardProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const compactAdaptiveGrid = { gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" };
+  const adaptiveGrid = { gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" };
 
   const brands = getBrands();
   const models = car.brand ? getModels(car.brand) : [];
@@ -149,8 +151,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         )}
 
         {/* Brand + Model */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="space-y-1">
+        <div className="grid gap-2.5" style={compactAdaptiveGrid}>
+          <div className="space-y-1 min-w-0">
             <Label className="text-[11px] text-muted-foreground font-medium">Brand</Label>
             <Select value={car.brand || undefined} onValueChange={handleBrandChange}>
               <SelectTrigger className="h-9 text-sm bg-card border border-border/70 hover:border-border shadow-none focus:ring-2 focus:ring-ring/10">
@@ -169,7 +171,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <Label className="text-[11px] text-muted-foreground font-medium">Model</Label>
             <Select
               value={car.model || undefined}
@@ -225,7 +227,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
             {/* Vehicle basics */}
             <Section label="Vehicle">
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid gap-2.5" style={adaptiveGrid}>
                 <NumericInput
                   label="Purchase price"
                   unit="SEK"
@@ -235,7 +237,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                   required
                 />
 
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-[11px] text-muted-foreground font-medium">
                     Fuel type
                   </Label>
@@ -281,14 +283,13 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             {/* ── Ownership — always visible for cash and loan ──────────── */}
             {(car.financingMode === "cash" || car.financingMode === "loan") && (
               <Section label="Ownership">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid gap-2.5" style={adaptiveGrid}>
                   <NumericInput
                     label="Ownership period"
                     unit="years"
                     value={car.ownershipYears}
                     onChange={(v) => update({ ownershipYears: Math.max(1, v) })}
                     min={1}
-                    hint="How long you plan to keep the car"
                   />
                   <ReadonlyField
                     label="Est. residual value"
@@ -301,7 +302,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             {/* ── Loan main fields ─────────────────────────────────────── */}
             {car.financingMode === "loan" && (
               <Section label="Loan details">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid gap-2.5" style={adaptiveGrid}>
                   <NumericInput
                     label="Down payment"
                     unit="SEK"
@@ -309,7 +310,6 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     onChange={(v) => updateLoan({ downPayment: v })}
                     step={10000}
                     required
-                    hint="Amount paid upfront"
                   />
                   <ReadonlyField
                     label="Loan amount"
@@ -323,7 +323,6 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     onChange={(v) => updateLoan({ interestRate: v })}
                     step={0.1}
                     required
-                    hint="Annual rate from your bank"
                   />
                   <NumericInput
                     label="Loan term"
@@ -340,18 +339,17 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             {/* ── Leasing main fields ──────────────────────────────────── */}
             {car.financingMode === "leasing" && (
               <Section label="Lease details">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid gap-2.5" style={adaptiveGrid}>
                   <NumericInput
-                    label="Monthly lease fee"
+                    label="Monthly fee"
                     unit="SEK/mo"
                     value={car.leasing.monthlyLeaseCost}
                     onChange={(v) => updateLeasing({ monthlyLeaseCost: v })}
                     step={100}
                     required
-                    hint="Monthly payment to dealer"
                   />
                   <NumericInput
-                    label="Contract length"
+                    label="Contract term"
                     unit="months"
                     value={car.leasing.leaseDurationMonths}
                     onChange={(v) => updateLeasing({ leaseDurationMonths: Math.max(1, v) })}
@@ -364,7 +362,6 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     value={car.leasing.downPayment}
                     onChange={(v) => updateLeasing({ downPayment: v })}
                     step={1000}
-                    hint="Upfront / deposit payment"
                   />
                   <NumericInput
                     label="Included mileage"
@@ -397,7 +394,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
                 {/* Running costs */}
                 <Section label="Running costs">
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid gap-2.5" style={adaptiveGrid}>
                     <NumericInput
                       label="Fuel price"
                       unit={priceLabel}
@@ -432,13 +429,12 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                 {/* Loan optional extras */}
                 {car.financingMode === "loan" && (
                   <Section label="Loan — optional">
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid gap-2.5" style={adaptiveGrid}>
                       <NumericInput
                         label="Balloon payment"
                         unit="SEK"
                         value={car.loan.residualBalloon}
                         onChange={(v) => updateLoan({ residualBalloon: v })}
-                        hint="Optional residual at term end"
                       />
                       <NumericInput
                         label="Monthly admin fee"
@@ -453,14 +449,13 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                 {/* Lease optional extras */}
                 {car.financingMode === "leasing" && (
                   <Section label="Lease — optional">
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid gap-2.5" style={adaptiveGrid}>
                       <NumericInput
                         label="Excess km cost"
                         unit="SEK/km"
                         value={car.leasing.excessMileageCostPerKm}
                         onChange={(v) => updateLeasing({ excessMileageCostPerKm: v })}
                         step={0.1}
-                        hint="Cost per km over limit"
                       />
                       <NumericInput
                         label="End-of-term fee"
