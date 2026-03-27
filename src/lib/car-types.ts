@@ -58,15 +58,19 @@ export interface CarResult {
   brand?: string;
   fuelType?: FuelType;
   financingMode: FinancingMode;
+  ownershipMonths: number;
   annualFuelCost: number;
   totalDepreciation: number;
   totalOwnershipCost: number;
   monthlyCost: number;
   yearlyCost: number;
+  costPerKm: number;
   residualValuePercent: number;
   breakdown: CostBreakdown;
   verdict: string;
 }
+
+// ─── Residual value ──────────────────────────────────────────────────────────
 
 export function calculateResidualPercent(years: number, fuelType: FuelType): number {
   if (years <= 0) return 100;
@@ -80,124 +84,175 @@ export function calculateResidualPercent(years: number, fuelType: FuelType): num
   return Math.round(Math.max(residual * 100, 5));
 }
 
-function calculateLoanMonthlyPayment(principal: number, annualRate: number, months: number, balloon: number): number {
+// ─── Loan monthly payment (annuity with optional balloon) ────────────────────
+
+function calculateLoanMonthlyPayment(
+  principal: number,
+  annualRatePercent: number,
+  months: number,
+  balloon: number,
+): number {
   if (months <= 0 || principal <= 0) return 0;
-  const adjustedPrincipal = principal - balloon / Math.pow(1 + annualRate / 12, months);
-  if (annualRate === 0) return adjustedPrincipal / months;
-  const r = annualRate / 100 / 12;
-  return adjustedPrincipal * (r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
+  const r = annualRatePercent / 100 / 12;
+  if (r === 0) {
+    return (principal - balloon) / months;
+  }
+  // PV of balloon at end of term
+  const pvBalloon = balloon / Math.pow(1 + r, months);
+  const amortized = principal - pvBalloon;
+  return amortized * (r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
 }
 
+// ─── Main calculation ────────────────────────────────────────────────────────
+
 export function calculateResults(car: CarInput): CarResult {
+  const ownershipYears = Math.max(car.ownershipYears, 0.25);
+  const ownershipMonths = Math.round(ownershipYears * 12);
+  const totalKm = car.annualMileage * ownershipYears;
+
   const annualFuelCost = (car.annualMileage / 100) * car.fuelConsumption * car.fuelPrice;
+  const totalFuel = annualFuelCost * ownershipYears;
+  const totalInsurance = car.insuranceCost * ownershipYears;
+  const totalTax = car.taxCost * ownershipYears;
+  const totalService = car.serviceCost * ownershipYears;
 
   const emptyBreakdown: CostBreakdown = {
     fuel: 0, insurance: 0, tax: 0, service: 0, depreciation: 0,
     financingCost: 0, leaseCost: 0, downPayment: 0, endOfTermFee: 0, mileagePenalty: 0,
   };
 
-  if (car.financingMode === "cash") {
-    const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
-    const residualValue = car.purchasePrice * (residualPercent / 100);
-    const totalDepreciation = car.purchasePrice - residualValue;
-    const totalFuel = annualFuelCost * car.ownershipYears;
-    const totalInsurance = car.insuranceCost * car.ownershipYears;
-    const totalTax = car.taxCost * car.ownershipYears;
-    const totalService = car.serviceCost * car.ownershipYears;
-    const totalOwnershipCost = totalDepreciation + totalFuel + totalInsurance + totalTax + totalService;
-    const monthlyCost = totalOwnershipCost / (car.ownershipYears * 12);
+  const runningCosts = { fuel: totalFuel, insurance: totalInsurance, tax: totalTax, service: totalService };
 
+  const buildResult = (
+    breakdown: CostBreakdown,
+    totalOwnershipCost: number,
+    residualPercent: number,
+    totalDepreciation: number,
+  ): CarResult => {
+    const monthlyCost = totalOwnershipCost / ownershipMonths;
+    const yearlyCost = totalOwnershipCost / ownershipYears;
+    const costPerKm = totalKm > 0 ? totalOwnershipCost / totalKm : 0;
     return {
-      id: car.id, name: car.name || "Unnamed Car", brand: car.brand, fuelType: car.fuelType,
-      financingMode: "cash",
+      id: car.id,
+      name: car.name || "Unnamed Car",
+      brand: car.brand,
+      fuelType: car.fuelType,
+      financingMode: car.financingMode,
+      ownershipMonths,
       annualFuelCost: Math.round(annualFuelCost),
       totalDepreciation: Math.round(totalDepreciation),
       totalOwnershipCost: Math.round(totalOwnershipCost),
       monthlyCost: Math.round(monthlyCost),
-      yearlyCost: Math.round(totalOwnershipCost / car.ownershipYears),
+      yearlyCost: Math.round(yearlyCost),
+      costPerKm: Math.round(costPerKm * 100) / 100,
       residualValuePercent: residualPercent,
       breakdown: {
-        ...emptyBreakdown,
-        fuel: Math.round(totalFuel), insurance: Math.round(totalInsurance),
-        tax: Math.round(totalTax), service: Math.round(totalService),
-        depreciation: Math.round(totalDepreciation),
+        fuel: Math.round(runningCosts.fuel),
+        insurance: Math.round(runningCosts.insurance),
+        tax: Math.round(runningCosts.tax),
+        service: Math.round(runningCosts.service),
+        depreciation: Math.round(breakdown.depreciation),
+        financingCost: Math.round(breakdown.financingCost),
+        leaseCost: Math.round(breakdown.leaseCost),
+        downPayment: Math.round(breakdown.downPayment),
+        endOfTermFee: Math.round(breakdown.endOfTermFee),
+        mileagePenalty: Math.round(breakdown.mileagePenalty),
       },
       verdict: "",
     };
+  };
+
+  // ── Cash ───────────────────────────────────────────────────────────────────
+  if (car.financingMode === "cash") {
+    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType);
+    const totalDepreciation = car.purchasePrice * (1 - residualPercent / 100);
+    const totalOwnershipCost = totalDepreciation + totalFuel + totalInsurance + totalTax + totalService;
+
+    return buildResult(
+      { ...emptyBreakdown, depreciation: totalDepreciation },
+      totalOwnershipCost,
+      residualPercent,
+      totalDepreciation,
+    );
   }
 
+  // ── Loan ───────────────────────────────────────────────────────────────────
+  // Key principle: ownership cost = depreciation + financing cost (interest + fees) + running costs
+  // Principal repayment is NOT an additional cost — it's captured by depreciation.
   if (car.financingMode === "loan") {
     const loan = car.loan;
-    const loanAmount = car.purchasePrice - loan.downPayment;
-    const months = loan.loanTermMonths || 60;
-    const years = months / 12;
-    const monthlyPayment = calculateLoanMonthlyPayment(loanAmount, loan.interestRate, months, loan.residualBalloon);
-    const totalLoanPayments = monthlyPayment * months;
-    const totalAdminFees = loan.monthlyAdminFee * months;
-    const financingCost = totalLoanPayments + totalAdminFees + loan.residualBalloon - loanAmount;
+    const loanAmount = Math.max(0, car.purchasePrice - loan.downPayment);
+    const loanMonths = Math.max(1, loan.loanTermMonths);
 
-    const totalFuel = annualFuelCost * years;
-    const totalInsurance = car.insuranceCost * years;
-    const totalTax = car.taxCost * years;
-    const totalService = car.serviceCost * years;
+    const monthlyPayment = calculateLoanMonthlyPayment(
+      loanAmount, loan.interestRate, loanMonths, loan.residualBalloon,
+    );
+    const totalLoanPayments = monthlyPayment * loanMonths;
+    const totalAdminFees = loan.monthlyAdminFee * loanMonths;
 
-    const residualPercent = calculateResidualPercent(years, car.fuelType);
-    const residualValue = car.purchasePrice * (residualPercent / 100);
-    const totalDepreciation = car.purchasePrice - residualValue;
+    // Interest cost = total payments + balloon - original loan amount
+    const interestCost = Math.max(0, totalLoanPayments + loan.residualBalloon - loanAmount);
+    const financingCost = interestCost + totalAdminFees;
 
-    const totalOwnershipCost = loan.downPayment + totalLoanPayments + totalAdminFees + loan.residualBalloon + totalFuel + totalInsurance + totalTax + totalService;
-    const monthlyCost = totalOwnershipCost / months;
+    // Depreciation based on ownership years (not loan term)
+    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType);
+    const totalDepreciation = car.purchasePrice * (1 - residualPercent / 100);
 
-    return {
-      id: car.id, name: car.name || "Unnamed Car", brand: car.brand, fuelType: car.fuelType,
-      financingMode: "loan",
-      annualFuelCost: Math.round(annualFuelCost),
-      totalDepreciation: Math.round(totalDepreciation),
-      totalOwnershipCost: Math.round(totalOwnershipCost),
-      monthlyCost: Math.round(monthlyCost),
-      yearlyCost: Math.round(totalOwnershipCost / years),
-      residualValuePercent: residualPercent,
-      breakdown: {
-        ...emptyBreakdown,
-        fuel: Math.round(totalFuel), insurance: Math.round(totalInsurance),
-        tax: Math.round(totalTax), service: Math.round(totalService),
-        depreciation: Math.round(totalDepreciation),
-        financingCost: Math.round(financingCost),
-        downPayment: Math.round(loan.downPayment),
-      },
-      verdict: "",
-    };
+    // Total = depreciation + financing cost + running costs
+    // (depreciation covers the equity loss; financing cost covers the cost of borrowing)
+    const totalOwnershipCost = totalDepreciation + financingCost + totalFuel + totalInsurance + totalTax + totalService;
+
+    return buildResult(
+      { ...emptyBreakdown, depreciation: totalDepreciation, financingCost },
+      totalOwnershipCost,
+      residualPercent,
+      totalDepreciation,
+    );
   }
 
-  // Leasing
+  // ── Leasing ────────────────────────────────────────────────────────────────
+  // For lease: cost = lease payments + upfront + fees + running costs
+  // No separate depreciation — it's embedded in the lease rate.
   const lease = car.leasing;
-  const months = lease.leaseDurationMonths || 36;
-  const years = months / 12;
-  const totalLease = lease.monthlyLeaseCost * months;
+  const leaseMonths = Math.max(1, lease.leaseDurationMonths);
+  // Ownership duration for a lease defaults to the contract length
+  const leaseYears = leaseMonths / 12;
+  // Running costs are for the lease duration specifically
+  const leaseFuel = annualFuelCost * leaseYears;
+  const leaseInsurance = car.insuranceCost * leaseYears;
+  const leaseTax = car.taxCost * leaseYears;
+  const leaseService = car.serviceCost * leaseYears;
+
+  const totalLease = lease.monthlyLeaseCost * leaseMonths;
   const excessMileage = Math.max(0, car.annualMileage - lease.includedMileage);
-  const mileagePenalty = excessMileage * lease.excessMileageCostPerKm * years;
+  const mileagePenalty = excessMileage * lease.excessMileageCostPerKm * leaseYears;
 
-  const totalFuel = annualFuelCost * years;
-  const totalInsurance = car.insuranceCost * years;
-  const totalTax = car.taxCost * years;
-  const totalService = car.serviceCost * years;
-
-  const totalOwnershipCost = lease.downPayment + totalLease + mileagePenalty + lease.endOfTermFee + totalFuel + totalInsurance + totalTax + totalService;
-  const monthlyCost = totalOwnershipCost / months;
+  const totalOwnershipCost =
+    lease.downPayment + totalLease + mileagePenalty + lease.endOfTermFee +
+    leaseFuel + leaseInsurance + leaseTax + leaseService;
 
   return {
-    id: car.id, name: car.name || "Unnamed Car", brand: car.brand, fuelType: car.fuelType,
+    id: car.id,
+    name: car.name || "Unnamed Car",
+    brand: car.brand,
+    fuelType: car.fuelType,
     financingMode: "leasing",
+    ownershipMonths: leaseMonths,
     annualFuelCost: Math.round(annualFuelCost),
     totalDepreciation: 0,
     totalOwnershipCost: Math.round(totalOwnershipCost),
-    monthlyCost: Math.round(monthlyCost),
-    yearlyCost: Math.round(totalOwnershipCost / years),
+    monthlyCost: Math.round(totalOwnershipCost / leaseMonths),
+    yearlyCost: Math.round(totalOwnershipCost / leaseYears),
+    costPerKm: car.annualMileage * leaseYears > 0
+      ? Math.round(totalOwnershipCost / (car.annualMileage * leaseYears) * 100) / 100
+      : 0,
     residualValuePercent: 0,
     breakdown: {
       ...emptyBreakdown,
-      fuel: Math.round(totalFuel), insurance: Math.round(totalInsurance),
-      tax: Math.round(totalTax), service: Math.round(totalService),
+      fuel: Math.round(leaseFuel),
+      insurance: Math.round(leaseInsurance),
+      tax: Math.round(leaseTax),
+      service: Math.round(leaseService),
       leaseCost: Math.round(totalLease),
       downPayment: Math.round(lease.downPayment),
       endOfTermFee: Math.round(lease.endOfTermFee),
@@ -206,6 +261,8 @@ export function calculateResults(car: CarInput): CarResult {
     verdict: "",
   };
 }
+
+// ─── Defaults ────────────────────────────────────────────────────────────────
 
 export function createEmptyCar(id: string): CarInput {
   return {
@@ -242,6 +299,8 @@ export function createEmptyCar(id: string): CarInput {
   };
 }
 
+// ─── Currency ────────────────────────────────────────────────────────────────
+
 export const SEK_TO_EUR = 0.088;
 
 export function formatCurrency(value: number, currency: Currency): string {
@@ -251,24 +310,37 @@ export function formatCurrency(value: number, currency: Currency): string {
   return `${Math.round(value).toLocaleString("sv-SE")} kr`;
 }
 
+// ─── Verdicts ────────────────────────────────────────────────────────────────
+
 export function generateVerdict(result: CarResult, allResults: CarResult[]): string {
   if (allResults.length < 2) return "";
-  const sorted = [...allResults].sort((a, b) => a.monthlyCost - b.monthlyCost);
-  if (result.id === sorted[0].id) return "Best value";
+
+  const sortedMonthly = [...allResults].sort((a, b) => a.monthlyCost - b.monthlyCost);
+  const sortedTotal = [...allResults].sort((a, b) => a.totalOwnershipCost - b.totalOwnershipCost);
+
+  const isLowestMonthly = result.id === sortedMonthly[0].id;
+  const isLowestTotal = result.id === sortedTotal[0].id;
+
+  if (isLowestMonthly && isLowestTotal) return "Lowest monthly and total cost";
+  if (isLowestMonthly) return "Lowest monthly cost";
+  if (isLowestTotal) return "Lowest total cost";
 
   const b = result.breakdown;
   const total = result.totalOwnershipCost;
   if (total === 0) return "";
 
-  if (b.depreciation / total > 0.45) return "High depreciation";
-  if (b.financingCost / total > 0.2) return "High financing cost";
-  if (b.fuel / total > 0.3) return "High fuel cost";
-  if (result.financingMode === "leasing") return "Lease convenience";
+  const runningCosts = b.fuel + b.insurance + b.tax + b.service;
+  const avgRunning = allResults.reduce((sum, r) => {
+    const rb = r.breakdown;
+    return sum + rb.fuel + rb.insurance + rb.tax + rb.service;
+  }, 0) / allResults.length;
 
-  const years = result.financingMode === "loan"
-    ? (result.breakdown.financingCost > 0 ? 5 : result.totalOwnershipCost / result.yearlyCost)
-    : result.totalOwnershipCost / result.yearlyCost;
+  if (runningCosts < avgRunning * 0.8) return "Lower running costs";
+  if (b.depreciation / total > 0.45) return "High depreciation share";
+  if (b.financingCost / total > 0.15) return "High financing cost";
+  if (b.fuel / total > 0.3) return "High fuel cost share";
+  if (result.financingMode === "leasing" && result.ownershipMonths <= 36) return "Lease is cheaper short-term";
+  if (result.costPerKm < sortedMonthly[0].costPerKm * 1.05) return "Competitive cost per km";
 
-  if (years <= 3) return "Better for short-term";
-  return "Better for long-term";
+  return "Higher total cost";
 }
