@@ -431,79 +431,7 @@ function BreakdownTab({
 
 type ChartViewMode = "monthly" | "total";
 
-function SingleCarChart({
-  car,
-  stackableRows,
-  scaleValue,
-  currency,
-  isWinner,
-}: {
-  car: CarResult;
-  stackableRows: typeof BREAKDOWN_ROWS;
-  scaleValue: (val: number, r: CarResult) => number;
-  currency: Currency;
-  isWinner: boolean;
-}) {
-  const chartData = [{
-    id: car.id,
-    name: car.name.length > 18 ? car.name.slice(0, 16) + "…" : car.name,
-    fullName: car.name,
-    ...Object.fromEntries(
-      stackableRows.map((row) => {
-        const raw = (car.breakdown as any)?.[row.key] ?? 0;
-        return [row.key, raw > 0 ? Number(scaleValue(raw, car)) : 0];
-      })
-    ),
-  }];
-
-  return (
-    <div className={`rounded-xl border p-3 ${isWinner ? "border-highlight/30 bg-highlight/4" : "border-border/50 bg-background/40"}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-foreground truncate max-w-[70%]">{car.name}</span>
-        <span className={`text-xs font-bold tabular-nums ${isWinner ? "text-highlight" : "text-foreground"}`}>
-          {formatCurrency(car.monthlyCost, currency)}/mo
-        </span>
-      </div>
-      <ResponsiveContainer width="100%" height={40}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ top: 0, right: 4, left: 0, bottom: 0 }}
-          barCategoryGap={0}
-        >
-          <XAxis type="number" hide />
-          <YAxis type="category" dataKey="name" hide width={0} />
-          <Tooltip
-            cursor={{ fill: "hsl(220,10%,96%)" }}
-            contentStyle={{
-              background: "white",
-              border: "1px solid hsl(220,13%,90%)",
-              borderRadius: "10px",
-              fontSize: "12px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
-            }}
-            formatter={(value: number, name: string) => {
-              const row = BREAKDOWN_ROWS.find((r) => r.key === name);
-              return [formatCurrency(value, currency), row?.label ?? name];
-            }}
-          />
-          {stackableRows.map((row) => (
-            <Bar
-              key={row.key}
-              dataKey={row.key}
-              stackId="cost"
-              fill={row.color}
-              radius={row.key === stackableRows[stackableRows.length - 1]?.key ? [0, 6, 6, 0] : [0, 0, 0, 0]}
-              barSize={22}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function ComparisonBar({
+function MetricBar({
   label,
   value,
   maxValue,
@@ -540,7 +468,6 @@ function ComparisonBar({
 function ChartTab({
   sorted,
   activeRows,
-  cheapestMonthly,
   currency,
 }: {
   sorted: CarResult[];
@@ -549,23 +476,33 @@ function ChartTab({
   maxMonthly: number;
   currency: Currency;
 }) {
-  const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
-  const [othersExpanded, setOthersExpanded] = useState(false);
-  const [compareId, setCompareId] = useState<string | null>(
-    sorted.length > 1 ? sorted[1].id : null
-  );
+  const winner = sorted[0];
   const isMulti = sorted.length > 1;
 
-  const winner = sorted[0];
-  const others = sorted.slice(1);
+  // Slicer state: set of visible car IDs in the main graph. Winner always included.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set([winner.id]));
+  const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
+  const [lowerExpanded, setLowerExpanded] = useState(false);
 
-  // Keep compareId valid when sorted changes
-  const compareCarId = compareId && sorted.find((r) => r.id === compareId) ? compareId : (others[0]?.id ?? null);
-  const compareCar = compareCarId ? sorted.find((r) => r.id === compareCarId) ?? null : null;
+  // Keep winner always selected; toggle others
+  const toggleCar = (id: string) => {
+    if (id === winner.id) return; // winner is pinned
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
-  // Active stackable rows across the currently visible cars
-  const visibleCars = compareCar ? [winner, compareCar] : [winner];
-  const stackableRows = activeRows.filter((row) =>
+  // Cars visible in the main graph, in sorted order, max 4
+  const visibleCars = sorted.filter((r) => selectedIds.has(r.id)).slice(0, 4);
+
+  // Only show legend rows used by currently visible cars
+  const visibleStackableRows = activeRows.filter((row) =>
     visibleCars.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
   );
 
@@ -574,30 +511,32 @@ function ChartTab({
     return totalVal / Math.max(1, r.ownershipMonths);
   };
 
-  // Comparison metrics between winner and selected car
-  const maxMonthly = Math.max(winner.monthlyCost, compareCar?.monthlyCost ?? 0);
-  const maxPerKm = Math.max(winner.costPerKm, compareCar?.costPerKm ?? 0);
-  const maxTotal = Math.max(winner.totalOwnershipCost, compareCar?.totalOwnershipCost ?? 0);
+  // Build recharts data: one entry per visible car
+  const chartData = visibleCars.map((r) => {
+    const entry: Record<string, number | string> = {
+      name: r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name,
+    };
+    visibleStackableRows.forEach((row) => {
+      const raw = (r.breakdown as any)?.[row.key] ?? 0;
+      entry[row.key] = raw > 0 ? Number(scaleValue(raw, r)) : 0;
+    });
+    return entry;
+  });
 
-  const monthlyDiff = compareCar ? Math.abs(compareCar.monthlyCost - winner.monthlyCost) : 0;
+  const chartHeight = Math.max(visibleCars.length * 52, 60);
 
-  // Biggest differences between winner and selected compare car
-  const largestDiffs = compareCar
-    ? stackableRows
-        .map((row) => {
-          const wVal = scaleValue(Number((winner.breakdown as any)?.[row.key] ?? 0), winner);
-          const cVal = scaleValue(Number((compareCar.breakdown as any)?.[row.key] ?? 0), compareCar);
-          return { ...row, diff: cVal - wVal, wVal, cVal };
-        })
-        .filter((x) => Math.abs(x.diff) > 0.5)
-        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-        .slice(0, 3)
-    : [];
+  // Lower sections: all-cars max for proportional bars
+  const maxMonthlyAll = Math.max(...sorted.map((r) => r.monthlyCost), 1);
+  const maxPerKmAll = Math.max(...sorted.map((r) => r.costPerKm), 1);
+  const maxTotalAll = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
+
+  const lowerCars = lowerExpanded ? sorted : [winner];
 
   return (
     <div className="space-y-4">
-      {/* Header row: mode toggle */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+
+      {/* ── Mode toggle ── */}
+      <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold text-foreground">Cost composition</p>
         <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
           {([
@@ -611,7 +550,7 @@ function ChartTab({
                 type="button"
                 onClick={() => setChartMode(m.key)}
                 className={[
-                  "min-w-[80px] px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
+                  "min-w-[76px] px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
                   active
                     ? "bg-card text-foreground shadow-sm border border-border/40"
                     : "text-muted-foreground hover:text-foreground hover:bg-card/50",
@@ -624,156 +563,174 @@ function ChartTab({
         </div>
       </div>
 
-      {/* Compact legend — only rows used in visible cars */}
+      {/* ── Slicer chips (only when multiple cars) ── */}
+      {isMulti && (
+        <div className="flex flex-wrap gap-1.5">
+          {sorted.map((car) => {
+            const isSelected = selectedIds.has(car.id);
+            const isWinnerCar = car.id === winner.id;
+            return (
+              <button
+                key={car.id}
+                type="button"
+                onClick={() => toggleCar(car.id)}
+                className={[
+                  "px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150 select-none",
+                  isSelected
+                    ? isWinnerCar
+                      ? "bg-highlight text-white ring-1 ring-highlight/50 cursor-default"
+                      : "bg-foreground text-background ring-1 ring-foreground/20"
+                    : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 border border-border/40",
+                ].join(" ")}
+              >
+                {car.name.length > 18 ? car.name.slice(0, 16) + "…" : car.name}
+                {isWinnerCar && (
+                  <span className="ml-1 opacity-70 text-[9px] uppercase tracking-wider">★</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Compact legend ── */}
       <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {stackableRows.map((row) => (
+        {visibleStackableRows.map((row) => (
           <div key={row.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} />
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: row.color }} />
             {row.label}
           </div>
         ))}
       </div>
 
-      {/* Winner — always shown */}
-      <div>
-        {isMulti && (
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-highlight">Best value</span>
-            <span className="h-px flex-1 bg-highlight/20" />
-          </div>
-        )}
-        <SingleCarChart
-          car={winner}
-          stackableRows={stackableRows}
-          scaleValue={scaleValue}
-          currency={currency}
-          isWinner={isMulti}
-        />
+      {/* ── Single stacked bar chart ── */}
+      <div className="rounded-xl border border-border/60 bg-background/50 px-3 pt-3 pb-2">
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <BarChart
+            data={chartData}
+            layout="vertical"
+            margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+            barCategoryGap={14}
+          >
+            <XAxis type="number" hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={100}
+              tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ fill: "hsl(220,10%,96%)" }}
+              contentStyle={{
+                background: "white",
+                border: "1px solid hsl(220,13%,90%)",
+                borderRadius: "10px",
+                fontSize: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
+              }}
+              formatter={(value: number, name: string) => {
+                const row = BREAKDOWN_ROWS.find((r) => r.key === name);
+                return [formatCurrency(value, currency), row?.label ?? name];
+              }}
+            />
+            {visibleStackableRows.map((row) => (
+              <Bar
+                key={row.key}
+                dataKey={row.key}
+                stackId="cost"
+                fill={row.color}
+                radius={
+                  row.key === visibleStackableRows[visibleStackableRows.length - 1]?.key
+                    ? [0, 5, 5, 0]
+                    : [0, 0, 0, 0]
+                }
+                barSize={20}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
-      {/* Compare dropdown + chart (only when multiple cars) */}
-      {isMulti && (
-        <div>
-          {/* Compare selector */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest shrink-0">Compare with</span>
-            <span className="h-px flex-1 bg-border/60" />
-            <select
-              value={compareCarId ?? ""}
-              onChange={(e) => setCompareId(e.target.value)}
-              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-secondary hover:bg-secondary/80 border border-border/40 transition-colors max-w-[180px] truncate"
-            >
-              {others.map((car) => (
-                <option key={car.id} value={car.id}>{car.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Compare car chart */}
-          {compareCar && (
-            <SingleCarChart
-              car={compareCar}
-              stackableRows={stackableRows}
-              scaleValue={scaleValue}
-              currency={currency}
-              isWinner={false}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Show all cars toggle */}
-      {others.length > 1 && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setOthersExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-0.5"
-          >
-            <span className="h-px flex-1 bg-border/40" />
-            <span className="font-medium whitespace-nowrap text-[11px]">
-              {othersExpanded ? "Hide all cars ▲" : `Show all ${sorted.length} cars ▼`}
-            </span>
-            <span className="h-px flex-1 bg-border/40" />
-          </button>
-
-          {othersExpanded && (
-            <div className="mt-2 space-y-2">
-              {others
-                .filter((car) => car.id !== compareCarId)
-                .map((car) => (
-                  <SingleCarChart
-                    key={car.id}
-                    car={car}
-                    stackableRows={activeRows.filter((row) =>
-                      sorted.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
-                    )}
-                    scaleValue={scaleValue}
-                    currency={currency}
-                    isWinner={false}
-                  />
-                ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Biggest differences (winner vs selected) */}
-      {largestDiffs.length > 0 && (
-        <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-1.5">
-          <div className="text-xs font-semibold text-foreground">Biggest differences</div>
-          <div className="space-y-1.5">
-            {largestDiffs.map((item) => {
-              const diffText =
-                item.diff > 0
-                  ? `${compareCar!.name} spends ${formatCurrency(item.diff, currency)} more on ${item.label.toLowerCase()}`
-                  : `${winner.name} spends ${formatCurrency(Math.abs(item.diff), currency)} more on ${item.label.toLowerCase()}`;
-              return (
-                <div key={item.key} className="flex items-start gap-2 text-[11px]">
-                  <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: item.color }} />
-                  <span className="text-muted-foreground">{diffText}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Focused comparison bars: winner vs selected only ── */}
+      {/* ── Lower metric sections: winner only by default, expand to reveal all ── */}
       <div className="space-y-3 pt-0.5">
+
+        {/* Section header with expand toggle */}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+            Summary
+          </p>
+          {isMulti && (
+            <button
+              type="button"
+              onClick={() => setLowerExpanded((v) => !v)}
+              className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {lowerExpanded ? "Show less ▲" : `Show all ${sorted.length} cars ▼`}
+            </button>
+          )}
+        </div>
+
         {/* Monthly */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground font-medium">Monthly</p>
-            {compareCar && (
-              <span className="text-[11px] text-muted-foreground">
-                Δ <span className="font-semibold text-highlight">{formatCurrency(monthlyDiff, currency)}/mo</span>
+            {isMulti && !lowerExpanded && (
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                <span className="font-semibold text-highlight">{formatCurrency(winner.monthlyCost, currency)}</span>
+                <span className="text-muted-foreground/60"> / best</span>
               </span>
             )}
           </div>
-          <ComparisonBar label={winner.name} value={winner.monthlyCost} maxValue={maxMonthly} isWinner={true} currency={currency} />
-          {compareCar && (
-            <ComparisonBar label={compareCar.name} value={compareCar.monthlyCost} maxValue={maxMonthly} isWinner={false} currency={currency} />
-          )}
+          <div className="space-y-1.5">
+            {lowerCars.map((r, i) => (
+              <MetricBar
+                key={r.id}
+                label={r.name}
+                value={r.monthlyCost}
+                maxValue={maxMonthlyAll}
+                isWinner={i === 0}
+                currency={currency}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Per km */}
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground font-medium">Per km</p>
-          <ComparisonBar label={winner.name} value={winner.costPerKm} maxValue={maxPerKm} isWinner={true} currency={currency} suffix="/km" />
-          {compareCar && (
-            <ComparisonBar label={compareCar.name} value={compareCar.costPerKm} maxValue={maxPerKm} isWinner={false} currency={currency} suffix="/km" />
-          )}
+          <div className="space-y-1.5">
+            {lowerCars.map((r, i) => (
+              <MetricBar
+                key={r.id}
+                label={r.name}
+                value={r.costPerKm}
+                maxValue={maxPerKmAll}
+                isWinner={i === 0}
+                currency={currency}
+                suffix="/km"
+              />
+            ))}
+          </div>
         </div>
 
         {/* Total */}
         {isMulti && (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground font-medium">Total</p>
-            <ComparisonBar label={winner.name} value={winner.totalOwnershipCost} maxValue={maxTotal} isWinner={true} currency={currency} />
-            {compareCar && (
-              <ComparisonBar label={compareCar.name} value={compareCar.totalOwnershipCost} maxValue={maxTotal} isWinner={false} currency={currency} />
-            )}
+            <div className="space-y-1.5">
+              {lowerCars.map((r, i) => (
+                <MetricBar
+                  key={r.id}
+                  label={r.name}
+                  value={r.totalOwnershipCost}
+                  maxValue={maxTotalAll}
+                  isWinner={i === 0}
+                  currency={currency}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
