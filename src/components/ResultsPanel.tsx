@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
@@ -20,16 +25,16 @@ const FINANCING_LABELS: Record<string, string> = {
 };
 
 const BREAKDOWN_ROWS: { key: string; label: string; color: string }[] = [
-  { key: "depreciation", label: "Depreciation",   color: "hsl(220,14%,40%)" },
-  { key: "financingCost", label: "Financing",      color: "hsl(0,65%,55%)" },
-  { key: "leaseCost",     label: "Lease payments", color: "hsl(200,60%,50%)" },
-  { key: "fuel",          label: "Fuel / Energy",  color: "hsl(38,80%,50%)" },
-  { key: "insurance",     label: "Insurance",      color: "hsl(215,55%,55%)" },
-  { key: "tax",           label: "Tax",            color: "hsl(280,40%,55%)" },
-  { key: "service",       label: "Service",        color: "hsl(152,45%,48%)" },
-  { key: "downPayment",   label: "Down payment",   color: "hsl(30,50%,55%)" },
-  { key: "mileagePenalty",label: "Mileage penalty",color: "hsl(15,70%,55%)" },
-  { key: "endOfTermFee",  label: "End-of-term fee",color: "hsl(340,40%,55%)" },
+  { key: "depreciation", label: "Depreciation", color: "hsl(220,14%,40%)" },
+  { key: "financingCost", label: "Financing", color: "hsl(0,65%,55%)" },
+  { key: "leaseCost", label: "Lease payments", color: "hsl(200,60%,50%)" },
+  { key: "fuel", label: "Fuel / Energy", color: "hsl(38,80%,50%)" },
+  { key: "insurance", label: "Insurance", color: "hsl(215,55%,55%)" },
+  { key: "tax", label: "Tax", color: "hsl(280,40%,55%)" },
+  { key: "service", label: "Service", color: "hsl(152,45%,48%)" },
+  { key: "downPayment", label: "Down payment", color: "hsl(30,50%,55%)" },
+  { key: "mileagePenalty", label: "Mileage penalty", color: "hsl(15,70%,55%)" },
+  { key: "endOfTermFee", label: "End-of-term fee", color: "hsl(340,40%,55%)" },
 ];
 
 const CHART_COLORS = {
@@ -52,7 +57,7 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
   const maxMonthly = sorted[sorted.length - 1]?.monthlyCost ?? 0;
 
   const activeRows = BREAKDOWN_ROWS.filter((r) =>
-    sorted.some((car) => (car.breakdown as any)[r.key] > 0)
+    sorted.some((car) => ((car.breakdown as any)?.[r.key] ?? 0) > 0)
   );
 
   return (
@@ -76,13 +81,24 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
 
       <div className="p-4 sm:p-5">
         {tab === "overview" && (
-          <OverviewTab sorted={sorted} cheapestMonthly={cheapestMonthly} currency={currency} results={results} />
+          <OverviewTab
+            sorted={sorted}
+            cheapestMonthly={cheapestMonthly}
+            currency={currency}
+            results={results}
+          />
         )}
         {tab === "breakdown" && (
           <BreakdownTab sorted={sorted} activeRows={activeRows} currency={currency} />
         )}
         {tab === "chart" && (
-          <ChartTab sorted={sorted} cheapestMonthly={cheapestMonthly} maxMonthly={maxMonthly} currency={currency} />
+          <ChartTab
+            sorted={sorted}
+            activeRows={activeRows}
+            cheapestMonthly={cheapestMonthly}
+            maxMonthly={maxMonthly}
+            currency={currency}
+          />
         )}
       </div>
     </div>
@@ -92,7 +108,10 @@ export function ResultsPanel({ results, currency }: ResultsPanelProps) {
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
 function OverviewTab({
-  sorted, cheapestMonthly, currency, results,
+  sorted,
+  cheapestMonthly,
+  currency,
+  results,
 }: {
   sorted: (CarResult & { verdict: string })[];
   cheapestMonthly: number;
@@ -197,7 +216,9 @@ function OverviewTab({
 }
 
 function MiniStat({
-  label, value, accent,
+  label,
+  value,
+  accent,
 }: {
   label: string;
   value: string;
@@ -222,7 +243,9 @@ function MiniStat({
 type ViewMode = "monthly" | "yearly" | "total";
 
 function BreakdownTab({
-  sorted, activeRows, currency,
+  sorted,
+  activeRows,
+  currency,
 }: {
   sorted: CarResult[];
   activeRows: typeof BREAKDOWN_ROWS;
@@ -231,7 +254,6 @@ function BreakdownTab({
   const [viewMode, setViewMode] = useState<ViewMode>("monthly");
   const isMulti = sorted.length > 1;
 
-  // Use ownershipMonths from CarResult — exact, not derived from rounded values
   function scale(totalVal: number, r: CarResult): number {
     const months = r.ownershipMonths;
     const years = months / 12;
@@ -242,13 +264,12 @@ function BreakdownTab({
 
   const VIEW_MODES: { key: ViewMode; label: string }[] = [
     { key: "monthly", label: "Monthly" },
-    { key: "yearly",  label: "Yearly"  },
-    { key: "total",   label: "Total"   },
+    { key: "yearly", label: "Yearly" },
+    { key: "total", label: "Total" },
   ];
 
   return (
     <div className="space-y-4">
-
       {/* View-mode toggle */}
       <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
         {VIEW_MODES.map((m) => {
@@ -338,14 +359,18 @@ function BreakdownTab({
 
       {/* Permanent summary footer */}
       <div className="rounded-xl border border-border/60 overflow-hidden">
-        <div className="grid border-b border-border/50 bg-secondary/30"
+        <div
+          className="grid border-b border-border/50 bg-secondary/30"
           style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
         >
           <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
             Summary
           </div>
           {sorted.map((r) => (
-            <div key={r.id} className="px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground truncate">
+            <div
+              key={r.id}
+              className="px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground truncate"
+            >
               {r.name.length > 12 ? r.name.slice(0, 10) + "…" : r.name}
             </div>
           ))}
@@ -353,8 +378,8 @@ function BreakdownTab({
 
         {([
           { key: "monthly" as ViewMode, label: "Per month", getValue: (r: CarResult) => r.monthlyCost },
-          { key: "yearly"  as ViewMode, label: "Per year",  getValue: (r: CarResult) => r.yearlyCost },
-          { key: "total"   as ViewMode, label: "Total",     getValue: (r: CarResult) => r.totalOwnershipCost },
+          { key: "yearly" as ViewMode, label: "Per year", getValue: (r: CarResult) => r.yearlyCost },
+          { key: "total" as ViewMode, label: "Total", getValue: (r: CarResult) => r.totalOwnershipCost },
         ]).map(({ key, label, getValue }) => {
           const isActive = viewMode === key;
           return (
@@ -366,14 +391,14 @@ function BreakdownTab({
               ].join(" ")}
               style={{ gridTemplateColumns: `1fr repeat(${sorted.length}, minmax(0,1fr))` }}
             >
-              <div className={[
-                "px-3 py-2.5 text-xs",
-                isActive ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
-              ].join(" ")}>
+              <div
+                className={[
+                  "px-3 py-2.5 text-xs",
+                  isActive ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
+                ].join(" ")}
+              >
                 <div className="flex items-center gap-1.5">
-                  {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-highlight shrink-0" />
-                  )}
+                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-highlight shrink-0" />}
                   {label}
                 </div>
               </div>
@@ -404,82 +429,206 @@ function BreakdownTab({
 
 // ─── Chart Tab ───────────────────────────────────────────────────────────────
 
+type ChartViewMode = "monthly" | "total";
+
 function ChartTab({
-  sorted, cheapestMonthly, maxMonthly, currency,
+  sorted,
+  activeRows,
+  cheapestMonthly,
+  maxMonthly,
+  currency,
 }: {
   sorted: CarResult[];
+  activeRows: typeof BREAKDOWN_ROWS;
   cheapestMonthly: number;
   maxMonthly: number;
   currency: Currency;
 }) {
-  const chartData = sorted.map((r) => ({
-    name: r.name.length > 16 ? r.name.slice(0, 14) + "…" : r.name,
-    monthly: r.monthlyCost,
-    isCheapest: r.monthlyCost === cheapestMonthly && sorted.length > 1,
-  }));
+  const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
+  const isMulti = sorted.length > 1;
 
-  const barHeight = 40;
-  const chartHeight = Math.max(sorted.length * (barHeight + 16) + 16, 80);
+  const stackableRows = activeRows.filter((row) =>
+    sorted.some((r) => ((r.breakdown as any)?.[row.key] ?? 0) > 0)
+  );
+
+  const scaleValue = (totalVal: number, r: CarResult) => {
+    if (chartMode === "total") return totalVal;
+    return totalVal / Math.max(1, r.ownershipMonths);
+  };
+
+  const stackedData = sorted.map((r) => {
+    const rowData: Record<string, number | string | boolean> = {
+      id: r.id,
+      name: r.name.length > 18 ? r.name.slice(0, 16) + "…" : r.name,
+      fullName: r.name,
+      isCheapest: r.monthlyCost === cheapestMonthly && isMulti,
+      totalCost: r.totalOwnershipCost,
+      monthlyCost: r.monthlyCost,
+    };
+
+    stackableRows.forEach((row) => {
+      const raw = (r.breakdown as any)?.[row.key] ?? 0;
+      rowData[row.key] = raw > 0 ? Number(scaleValue(raw, r)) : 0;
+    });
+
+    return rowData;
+  });
+
+  const chartHeight = Math.max(sorted.length * 72, 150);
+
+  const comparisonBase =
+    sorted.length >= 2 ? { cheaper: sorted[0], pricier: sorted[sorted.length - 1] } : null;
+
+  const largestDiffs = comparisonBase
+    ? stackableRows
+        .map((row) => {
+          const cheaperVal = Number((comparisonBase.cheaper.breakdown as any)?.[row.key] ?? 0);
+          const pricierVal = Number((comparisonBase.pricier.breakdown as any)?.[row.key] ?? 0);
+          const scaledCheaper = scaleValue(cheaperVal, comparisonBase.cheaper);
+          const scaledPricier = scaleValue(pricierVal, comparisonBase.pricier);
+          const diff = scaledPricier - scaledCheaper;
+
+          return {
+            ...row,
+            diff,
+            cheaperVal: scaledCheaper,
+            pricierVal: scaledPricier,
+          };
+        })
+        .filter((x) => Math.abs(x.diff) > 0.5)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+        .slice(0, 3)
+    : [];
+
+  const maxCostPerKm = Math.max(...sorted.map((r) => r.costPerKm), 1);
+  const maxTotal = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground font-medium">Monthly cost comparison</p>
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ left: 0, right: 64, top: 4, bottom: 0 }}
-        >
-          <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={96}
-            tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            cursor={{ fill: "hsl(220,10%,96%)" }}
-            contentStyle={{
-              background: "white",
-              border: "1px solid hsl(220,13%,90%)",
-              borderRadius: "10px",
-              fontSize: "12px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
-            }}
-            formatter={(value: number) => [formatCurrency(value, currency), "Monthly"]}
-          />
-          <Bar dataKey="monthly" radius={[0, 6, 6, 0]} barSize={barHeight}>
-            {chartData.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={entry.isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal}
+    <div className="space-y-5">
+      {/* Header / mode toggle */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Cost composition</p>
+          <p className="text-[11px] text-muted-foreground">
+            See where the difference comes from
+          </p>
+        </div>
+
+        <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5 w-full sm:w-auto">
+          {([
+            { key: "monthly" as ChartViewMode, label: "Monthly" },
+            { key: "total" as ChartViewMode, label: "Total" },
+          ]).map((m) => {
+            const active = chartMode === m.key;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setChartMode(m.key)}
+                className={[
+                  "flex-1 sm:flex-none min-w-[88px] px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
+                  active
+                    ? "bg-card text-foreground shadow-sm border border-border/40"
+                    : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                ].join(" ")}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {stackableRows.map((row) => (
+          <div key={row.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ background: row.color }}
+            />
+            {row.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Stacked composition chart */}
+      <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <BarChart
+            data={stackedData}
+            layout="vertical"
+            margin={{ top: 8, right: 20, left: 4, bottom: 8 }}
+            barCategoryGap={18}
+          >
+            <XAxis type="number" hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={110}
+              tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ fill: "hsl(220,10%,96%)" }}
+              contentStyle={{
+                background: "white",
+                border: "1px solid hsl(220,13%,90%)",
+                borderRadius: "10px",
+                fontSize: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
+              }}
+              formatter={(value: number, name: string) => {
+                const row = BREAKDOWN_ROWS.find((r) => r.key === name);
+                return [formatCurrency(value, currency), row?.label ?? name];
+              }}
+            />
+            {stackableRows.map((row) => (
+              <Bar
+                key={row.key}
+                dataKey={row.key}
+                stackId="cost"
+                fill={row.color}
+                radius={row.key === stackableRows[stackableRows.length - 1]?.key ? [0, 6, 6, 0] : [0, 0, 0, 0]}
+                barSize={26}
               />
             ))}
-            <LabelList
-              dataKey="monthly"
-              position="right"
-              formatter={(v: number) => formatCurrency(v, currency)}
-              style={{ fontSize: 11, fill: "hsl(220,8%,45%)", fontWeight: 600 }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+          </BarChart>
+        </ResponsiveContainer>
 
-      {/* Cost per km comparison */}
-      {sorted.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Cost per km</p>
-          <div className="space-y-1.5">
-            {sorted.map((r, i) => {
-              const isCheapest = i === 0;
+        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>
+            {chartMode === "monthly" ? "Monthly composition per car" : "Total ownership-period composition"}
+          </span>
+          <span>
+            {isMulti ? "Compare segment sizes to see what drives the gap" : "Breakdown by category"}
+          </span>
+        </div>
+      </div>
+
+      {/* Biggest differences */}
+      {largestDiffs.length > 0 && (
+        <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-2">
+          <div className="text-xs font-semibold text-foreground">
+            Biggest differences
+          </div>
+          <div className="space-y-2">
+            {largestDiffs.map((item) => {
+              const moreExpensiveName = comparisonBase?.pricier.name ?? "Pricier option";
+              const cheaperName = comparisonBase?.cheaper.name ?? "Cheaper option";
+              const diffText =
+                item.diff > 0
+                  ? `${moreExpensiveName} spends ${formatCurrency(item.diff, currency)} more on ${item.label.toLowerCase()}`
+                  : `${cheaperName} spends ${formatCurrency(Math.abs(item.diff), currency)} more on ${item.label.toLowerCase()}`;
+
               return (
-                <div key={r.id} className="flex justify-between text-xs">
-                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                  <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
-                    {formatCurrency(r.costPerKm, currency)}/km
-                  </span>
+                <div key={item.key} className="flex items-start gap-2 text-[11px]">
+                  <span
+                    className="w-2 h-2 rounded-full mt-1 shrink-0"
+                    style={{ background: item.color }}
+                  />
+                  <span className="text-muted-foreground">{diffText}</span>
                 </div>
               );
             })}
@@ -487,20 +636,105 @@ function ChartTab({
         </div>
       )}
 
-      {/* Total ownership cost bars */}
-      {sorted.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+      {/* Monthly summary comparison */}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground font-medium">Monthly comparison</p>
+          {isMulti && (
+            <span className="text-[11px] text-muted-foreground">
+              Difference:{" "}
+              <span className="font-semibold text-highlight">
+                {formatCurrency(maxMonthly - cheapestMonthly, currency)}/mo
+              </span>
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          {sorted.map((r, i) => {
+            const pct = maxMonthly > 0 ? (r.monthlyCost / maxMonthly) * 100 : 0;
+            const isCheapest = i === 0 && isMulti;
+
+            return (
+              <div key={r.id}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      isCheapest ? "text-highlight" : "text-foreground"
+                    }`}
+                  >
+                    {formatCurrency(r.monthlyCost, currency)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${pct}%`,
+                      background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cost per km */}
+      <div className="space-y-2 pt-1">
+        <p className="text-xs text-muted-foreground font-medium">Cost per km</p>
+        <div className="space-y-2">
+          {sorted.map((r, i) => {
+            const width = (r.costPerKm / maxCostPerKm) * 100;
+            const isBest = i === 0 && isMulti;
+
+            return (
+              <div key={r.id}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      isBest ? "text-highlight" : "text-foreground"
+                    }`}
+                  >
+                    {formatCurrency(r.costPerKm, currency)}/km
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${width}%`,
+                      background: isBest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Total ownership cost */}
+      {isMulti && (
+        <div className="space-y-2 pt-1">
           <p className="text-xs text-muted-foreground font-medium">Total ownership cost</p>
           <div className="space-y-2">
             {sorted.map((r, i) => {
-              const maxTotal = Math.max(...sorted.map((x) => x.totalOwnershipCost));
               const pct = maxTotal > 0 ? (r.totalOwnershipCost / maxTotal) * 100 : 0;
               const isCheapest = i === 0;
+
               return (
                 <div key={r.id}>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                    <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        isCheapest ? "text-highlight" : "text-foreground"
+                      }`}
+                    >
                       {formatCurrency(r.totalOwnershipCost, currency)}
                     </span>
                   </div>
