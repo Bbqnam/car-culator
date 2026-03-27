@@ -431,6 +431,78 @@ function BreakdownTab({
 
 type ChartViewMode = "monthly" | "total";
 
+function SingleCarChart({
+  car,
+  stackableRows,
+  scaleValue,
+  currency,
+  isWinner,
+}: {
+  car: CarResult;
+  stackableRows: typeof BREAKDOWN_ROWS;
+  scaleValue: (val: number, r: CarResult) => number;
+  currency: Currency;
+  isWinner: boolean;
+}) {
+  const chartData = [{
+    id: car.id,
+    name: car.name.length > 18 ? car.name.slice(0, 16) + "…" : car.name,
+    fullName: car.name,
+    ...Object.fromEntries(
+      stackableRows.map((row) => {
+        const raw = (car.breakdown as any)?.[row.key] ?? 0;
+        return [row.key, raw > 0 ? Number(scaleValue(raw, car)) : 0];
+      })
+    ),
+  }];
+
+  return (
+    <div className={`rounded-xl border p-3 ${isWinner ? "border-highlight/30 bg-highlight/4" : "border-border/50 bg-background/40"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-foreground truncate max-w-[70%]">{car.name}</span>
+        <span className={`text-xs font-bold tabular-nums ${isWinner ? "text-highlight" : "text-foreground"}`}>
+          {formatCurrency(car.monthlyCost, currency)}/mo
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={40}>
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 0, right: 4, left: 0, bottom: 0 }}
+          barCategoryGap={0}
+        >
+          <XAxis type="number" hide />
+          <YAxis type="category" dataKey="name" hide width={0} />
+          <Tooltip
+            cursor={{ fill: "hsl(220,10%,96%)" }}
+            contentStyle={{
+              background: "white",
+              border: "1px solid hsl(220,13%,90%)",
+              borderRadius: "10px",
+              fontSize: "12px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
+            }}
+            formatter={(value: number, name: string) => {
+              const row = BREAKDOWN_ROWS.find((r) => r.key === name);
+              return [formatCurrency(value, currency), row?.label ?? name];
+            }}
+          />
+          {stackableRows.map((row) => (
+            <Bar
+              key={row.key}
+              dataKey={row.key}
+              stackId="cost"
+              fill={row.color}
+              radius={row.key === stackableRows[stackableRows.length - 1]?.key ? [0, 6, 6, 0] : [0, 0, 0, 0]}
+              barSize={22}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function ChartTab({
   sorted,
   activeRows,
@@ -445,6 +517,7 @@ function ChartTab({
   currency: Currency;
 }) {
   const [chartMode, setChartMode] = useState<ChartViewMode>("monthly");
+  const [othersExpanded, setOthersExpanded] = useState(false);
   const isMulti = sorted.length > 1;
 
   const stackableRows = activeRows.filter((row) =>
@@ -456,25 +529,8 @@ function ChartTab({
     return totalVal / Math.max(1, r.ownershipMonths);
   };
 
-  const stackedData = sorted.map((r) => {
-    const rowData: Record<string, number | string | boolean> = {
-      id: r.id,
-      name: r.name.length > 18 ? r.name.slice(0, 16) + "…" : r.name,
-      fullName: r.name,
-      isCheapest: r.monthlyCost === cheapestMonthly && isMulti,
-      totalCost: r.totalOwnershipCost,
-      monthlyCost: r.monthlyCost,
-    };
-
-    stackableRows.forEach((row) => {
-      const raw = (r.breakdown as any)?.[row.key] ?? 0;
-      rowData[row.key] = raw > 0 ? Number(scaleValue(raw, r)) : 0;
-    });
-
-    return rowData;
-  });
-
-  const chartHeight = Math.max(sorted.length * 72, 150);
+  const winner = sorted[0];
+  const others = sorted.slice(1);
 
   const comparisonBase =
     sorted.length >= 2 ? { cheaper: sorted[0], pricier: sorted[sorted.length - 1] } : null;
@@ -487,13 +543,7 @@ function ChartTab({
           const scaledCheaper = scaleValue(cheaperVal, comparisonBase.cheaper);
           const scaledPricier = scaleValue(pricierVal, comparisonBase.pricier);
           const diff = scaledPricier - scaledCheaper;
-
-          return {
-            ...row,
-            diff,
-            cheaperVal: scaledCheaper,
-            pricierVal: scaledPricier,
-          };
+          return { ...row, diff, cheaperVal: scaledCheaper, pricierVal: scaledPricier };
         })
         .filter((x) => Math.abs(x.diff) > 0.5)
         .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
@@ -504,17 +554,11 @@ function ChartTab({
   const maxTotal = Math.max(...sorted.map((r) => r.totalOwnershipCost), 1);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header / mode toggle */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs font-semibold text-foreground">Cost composition</p>
-          <p className="text-[11px] text-muted-foreground">
-            See where the difference comes from
-          </p>
-        </div>
-
-        <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5 w-full sm:w-auto">
+        <p className="text-xs font-semibold text-foreground">Cost composition</p>
+        <div className="flex rounded-lg bg-secondary/60 p-0.5 gap-0.5">
           {([
             { key: "monthly" as ChartViewMode, label: "Monthly" },
             { key: "total" as ChartViewMode, label: "Total" },
@@ -526,7 +570,7 @@ function ChartTab({
                 type="button"
                 onClick={() => setChartMode(m.key)}
                 className={[
-                  "flex-1 sm:flex-none min-w-[88px] px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
+                  "min-w-[80px] px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-150",
                   active
                     ? "bg-card text-foreground shadow-sm border border-border/40"
                     : "text-muted-foreground hover:text-foreground hover:bg-card/50",
@@ -539,81 +583,72 @@ function ChartTab({
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-2">
+      {/* Compact legend — only active rows */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
         {stackableRows.map((row) => (
-          <div key={row.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ background: row.color }}
-            />
+          <div key={row.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} />
             {row.label}
           </div>
         ))}
       </div>
 
-      {/* Stacked composition chart */}
-      <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-        <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart
-            data={stackedData}
-            layout="vertical"
-            margin={{ top: 8, right: 20, left: 4, bottom: 8 }}
-            barCategoryGap={18}
-          >
-            <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="name"
-              width={110}
-              tick={{ fontSize: 11, fill: "hsl(220,8%,50%)" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: "hsl(220,10%,96%)" }}
-              contentStyle={{
-                background: "white",
-                border: "1px solid hsl(220,13%,90%)",
-                borderRadius: "10px",
-                fontSize: "12px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
-              }}
-              formatter={(value: number, name: string) => {
-                const row = BREAKDOWN_ROWS.find((r) => r.key === name);
-                return [formatCurrency(value, currency), row?.label ?? name];
-              }}
-            />
-            {stackableRows.map((row) => (
-              <Bar
-                key={row.key}
-                dataKey={row.key}
-                stackId="cost"
-                fill={row.color}
-                radius={row.key === stackableRows[stackableRows.length - 1]?.key ? [0, 6, 6, 0] : [0, 0, 0, 0]}
-                barSize={26}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-
-        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>
-            {chartMode === "monthly" ? "Monthly composition per car" : "Total ownership-period composition"}
-          </span>
-          <span>
-            {isMulti ? "Compare segment sizes to see what drives the gap" : "Breakdown by category"}
-          </span>
-        </div>
+      {/* Winner — always shown */}
+      <div>
+        {isMulti && (
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-highlight">Best value</span>
+            <span className="h-px flex-1 bg-highlight/20" />
+          </div>
+        )}
+        <SingleCarChart
+          car={winner}
+          stackableRows={stackableRows}
+          scaleValue={scaleValue}
+          currency={currency}
+          isWinner={isMulti}
+        />
       </div>
+
+      {/* Others — collapsed by default */}
+      {others.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOthersExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-1"
+          >
+            <span className="h-px flex-1 bg-border/60" />
+            <span className="font-medium whitespace-nowrap">
+              {othersExpanded
+                ? `Hide other ${others.length === 1 ? "car" : `${others.length} cars`} ▲`
+                : `Compare with ${others.length} other ${others.length === 1 ? "car" : "cars"} ▼`}
+            </span>
+            <span className="h-px flex-1 bg-border/60" />
+          </button>
+
+          {othersExpanded && (
+            <div className="mt-2 space-y-2">
+              {others.map((car) => (
+                <SingleCarChart
+                  key={car.id}
+                  car={car}
+                  stackableRows={stackableRows}
+                  scaleValue={scaleValue}
+                  currency={currency}
+                  isWinner={false}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Biggest differences */}
       {largestDiffs.length > 0 && (
-        <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-2">
-          <div className="text-xs font-semibold text-foreground">
-            Biggest differences
-          </div>
-          <div className="space-y-2">
+        <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-1.5">
+          <div className="text-xs font-semibold text-foreground">Biggest differences</div>
+          <div className="space-y-1.5">
             {largestDiffs.map((item) => {
               const moreExpensiveName = comparisonBase?.pricier.name ?? "Pricier option";
               const cheaperName = comparisonBase?.cheaper.name ?? "Cheaper option";
@@ -621,13 +656,9 @@ function ChartTab({
                 item.diff > 0
                   ? `${moreExpensiveName} spends ${formatCurrency(item.diff, currency)} more on ${item.label.toLowerCase()}`
                   : `${cheaperName} spends ${formatCurrency(Math.abs(item.diff), currency)} more on ${item.label.toLowerCase()}`;
-
               return (
                 <div key={item.key} className="flex items-start gap-2 text-[11px]">
-                  <span
-                    className="w-2 h-2 rounded-full mt-1 shrink-0"
-                    style={{ background: item.color }}
-                  />
+                  <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: item.color }} />
                   <span className="text-muted-foreground">{diffText}</span>
                 </div>
               );
@@ -637,9 +668,9 @@ function ChartTab({
       )}
 
       {/* Monthly summary comparison */}
-      <div className="space-y-2 pt-1">
+      <div className="space-y-1.5 pt-0.5">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground font-medium">Monthly comparison</p>
+          <p className="text-xs text-muted-foreground font-medium">Monthly</p>
           {isMulti && (
             <span className="text-[11px] text-muted-foreground">
               Difference:{" "}
@@ -649,31 +680,22 @@ function ChartTab({
             </span>
           )}
         </div>
-
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {sorted.map((r, i) => {
             const pct = maxMonthly > 0 ? (r.monthlyCost / maxMonthly) * 100 : 0;
             const isCheapest = i === 0 && isMulti;
-
             return (
               <div key={r.id}>
-                <div className="flex justify-between text-xs mb-1">
+                <div className="flex justify-between text-xs mb-0.5">
                   <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                  <span
-                    className={`font-semibold tabular-nums ${
-                      isCheapest ? "text-highlight" : "text-foreground"
-                    }`}
-                  >
+                  <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
                     {formatCurrency(r.monthlyCost, currency)}
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${pct}%`,
-                      background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
-                    }}
+                    style={{ width: `${pct}%`, background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
                   />
                 </div>
               </div>
@@ -683,32 +705,24 @@ function ChartTab({
       </div>
 
       {/* Cost per km */}
-      <div className="space-y-2 pt-1">
-        <p className="text-xs text-muted-foreground font-medium">Cost per km</p>
-        <div className="space-y-2">
+      <div className="space-y-1.5 pt-0.5">
+        <p className="text-xs text-muted-foreground font-medium">Per km</p>
+        <div className="space-y-1.5">
           {sorted.map((r, i) => {
             const width = (r.costPerKm / maxCostPerKm) * 100;
             const isBest = i === 0 && isMulti;
-
             return (
               <div key={r.id}>
-                <div className="flex justify-between text-xs mb-1">
+                <div className="flex justify-between text-xs mb-0.5">
                   <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                  <span
-                    className={`font-semibold tabular-nums ${
-                      isBest ? "text-highlight" : "text-foreground"
-                    }`}
-                  >
+                  <span className={`font-semibold tabular-nums ${isBest ? "text-highlight" : "text-foreground"}`}>
                     {formatCurrency(r.costPerKm, currency)}/km
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${width}%`,
-                      background: isBest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
-                    }}
+                    style={{ width: `${width}%`, background: isBest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
                   />
                 </div>
               </div>
@@ -719,32 +733,24 @@ function ChartTab({
 
       {/* Total ownership cost */}
       {isMulti && (
-        <div className="space-y-2 pt-1">
-          <p className="text-xs text-muted-foreground font-medium">Total ownership cost</p>
-          <div className="space-y-2">
+        <div className="space-y-1.5 pt-0.5">
+          <p className="text-xs text-muted-foreground font-medium">Total</p>
+          <div className="space-y-1.5">
             {sorted.map((r, i) => {
               const pct = maxTotal > 0 ? (r.totalOwnershipCost / maxTotal) * 100 : 0;
               const isCheapest = i === 0;
-
               return (
                 <div key={r.id}>
-                  <div className="flex justify-between text-xs mb-1">
+                  <div className="flex justify-between text-xs mb-0.5">
                     <span className="text-muted-foreground truncate max-w-[60%]">{r.name}</span>
-                    <span
-                      className={`font-semibold tabular-nums ${
-                        isCheapest ? "text-highlight" : "text-foreground"
-                      }`}
-                    >
+                    <span className={`font-semibold tabular-nums ${isCheapest ? "text-highlight" : "text-foreground"}`}>
                       {formatCurrency(r.totalOwnershipCost, currency)}
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${pct}%`,
-                        background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal,
-                      }}
+                      style={{ width: `${pct}%`, background: isCheapest ? CHART_COLORS.cheapest : CHART_COLORS.normal }}
                     />
                   </div>
                 </div>
