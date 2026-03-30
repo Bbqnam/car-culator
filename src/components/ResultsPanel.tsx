@@ -12,6 +12,7 @@ import {
 import { Lightbulb } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface ResultsPanelProps {
   results: CarResult[];
@@ -116,6 +117,8 @@ function OverviewTab({
 }) {
   const cheapestMonthly = sorted[0]?.monthlyCost ?? 0;
   const isMulti = sorted.length > 1;
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const detailsCar = sorted.find((r) => r.id === detailsId) ?? null;
 
   return (
     <div className="space-y-3">
@@ -210,6 +213,16 @@ function OverviewTab({
                 </p>
               </div>
             )}
+
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDetailsId(result.id)}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                Financing details →
+              </button>
+            </div>
           </div>
         );
       })}
@@ -226,6 +239,34 @@ function OverviewTab({
           </span>
         </div>
       )}
+
+      <Dialog
+        open={!!detailsCar}
+        onOpenChange={(open) => {
+          if (!open) setDetailsId(null);
+        }}
+      >
+        {detailsCar && (
+          <DialogContent className="max-w-lg">
+            <DialogTitle className="text-sm">{detailsCar.name} financing details</DialogTitle>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {FINANCING_LABELS[detailsCar.financingMode]} · {formatCurrency(detailsCar.monthlyCost, currency)}/mo
+              </p>
+              <div className="space-y-1.5">
+                {BREAKDOWN_ROWS.filter((row) => (detailsCar.breakdown[row.key] ?? 0) > 0).map((row) => (
+                  <div key={row.key} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="font-semibold">
+                      {formatCurrency(Math.round(detailsCar.breakdown[row.key]), currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }
@@ -797,7 +838,7 @@ function ChartTab({
                 ? "Only one selected"
                 : isSummaryExpanded
                 ? "Winner only ▴"
-                : "Show more ▾"}
+                : "Show all cars ▾"}
             </button>
           </div>
 
