@@ -535,7 +535,6 @@ function CarYAxisTick({
     </foreignObject>
   );
 }
-
 // Summary bar row with optional brand logo
 function MetricBar({
   car,
