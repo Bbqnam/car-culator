@@ -1,5 +1,5 @@
 export type FuelType = "petrol" | "diesel" | "electric";
-export type Currency = "SEK" | "EUR";
+export type Currency = "SEK" | "EUR" | "VND";
 export type FinancingMode = "cash" | "loan" | "leasing";
 
 export interface LoanInputs {
@@ -302,10 +302,26 @@ export function createEmptyCar(id: string): CarInput {
 // ─── Currency ────────────────────────────────────────────────────────────────
 
 export const SEK_TO_EUR = 0.088;
+export const SEK_TO_VND = 2550;
+
+export function convertSekToCurrency(value: number, currency: Currency): number {
+  if (currency === "EUR") return value * SEK_TO_EUR;
+  if (currency === "VND") return value * SEK_TO_VND;
+  return value;
+}
+
+export function getCurrencyCode(currency: Currency): string {
+  if (currency === "EUR") return "EUR";
+  if (currency === "VND") return "VND";
+  return "SEK";
+}
 
 export function formatCurrency(value: number, currency: Currency): string {
   if (currency === "EUR") {
-    return `€${Math.round(value * SEK_TO_EUR).toLocaleString("sv-SE")}`;
+    return `€${Math.round(convertSekToCurrency(value, currency)).toLocaleString("sv-SE")}`;
+  }
+  if (currency === "VND") {
+    return `${Math.round(convertSekToCurrency(value, currency)).toLocaleString("vi-VN")} ₫`;
   }
   return `${Math.round(value).toLocaleString("sv-SE")} kr`;
 }

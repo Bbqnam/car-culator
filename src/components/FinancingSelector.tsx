@@ -1,18 +1,20 @@
 import { FinancingMode } from "@/lib/car-types";
 import { Banknote, CreditCard, FileText } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface FinancingSelectorProps {
   value: FinancingMode;
   onChange: (mode: FinancingMode) => void;
 }
 
-const modes: { value: FinancingMode; label: string; icon: typeof Banknote }[] = [
-  { value: "cash",    label: "Cash",  icon: Banknote   },
-  { value: "loan",    label: "Loan",  icon: CreditCard  },
-  { value: "leasing", label: "Lease", icon: FileText    },
-];
-
 export function FinancingSelector({ value, onChange }: FinancingSelectorProps) {
+  const { language } = useI18n();
+  const modes: { value: FinancingMode; label: string; icon: typeof Banknote }[] = [
+    { value: "cash", label: language === "sv" ? "Kontant" : "Cash", icon: Banknote },
+    { value: "loan", label: language === "sv" ? "Lån" : "Loan", icon: CreditCard },
+    { value: "leasing", label: language === "sv" ? "Leasing" : "Lease", icon: FileText },
+  ];
+
   return (
     <div className="flex rounded-lg bg-secondary/70 p-0.5 gap-0.5">
       {modes.map((m) => {

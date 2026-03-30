@@ -67,7 +67,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             Commercialization trial mode
           </h3>
           <p className="text-xs text-muted-foreground max-w-[620px]">
-            Concept preview with realistic mock offers from future bank, leasing, and retailer integrations.
+            Concept preview focused on loan, leasing, and retailer offer options.
             No live pricing or real-time partner APIs are used in this prototype.
           </p>
         </div>
@@ -80,7 +80,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             className="h-8"
             onClick={() => setIsExpanded((prev) => !prev)}
           >
-            {isExpanded ? "Hide details" : "Show financing details"}
+            {isExpanded ? "Hide offer details" : "Show offer details"}
           </Button>
         </div>
       </div>

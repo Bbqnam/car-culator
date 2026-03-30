@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface NumericInputProps {
   label: string;
@@ -72,10 +78,13 @@ export function NumericInput({
   return (
     <div className="space-y-1">
       <div className="flex items-start justify-between min-h-[16px]">
-        <Label className="text-[11px] text-muted-foreground font-medium leading-tight">
-          {label}
-          {required && <span className="ml-1 text-amber-500">*</span>}
-        </Label>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Label className="text-[11px] text-muted-foreground font-medium leading-tight">
+            {label}
+            {required && <span className="ml-1 text-amber-500">*</span>}
+          </Label>
+          {hint && <FieldHint text={hint} />}
+        </div>
       </div>
       <div
         className={[
@@ -105,9 +114,6 @@ export function NumericInput({
           </span>
         )}
       </div>
-      {hint && (
-        <p className="text-[10px] text-muted-foreground/60 leading-tight">{hint}</p>
-      )}
     </div>
   );
 }
@@ -116,20 +122,52 @@ export function ReadonlyField({
   label,
   value,
   unit,
+  hint,
 }: {
   label: string;
   value: string;
   unit?: string;
+  hint?: string;
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
+      <div className="flex items-start justify-between min-h-[16px]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Label className="text-[11px] text-muted-foreground font-medium leading-tight">
+            {label}
+          </Label>
+          {hint && <FieldHint text={hint} />}
+        </div>
+      </div>
       <div className="min-h-[2.25rem] h-auto py-2 flex items-center justify-between px-3 rounded-md bg-secondary/40 border border-border/40">
-        <span className="text-sm font-medium text-foreground">{value}</span>
+        <span className="text-sm font-medium text-foreground tabular-nums whitespace-nowrap">
+          {value}
+        </span>
         {unit && (
-          <span className="text-[11px] text-muted-foreground/60">{unit}</span>
+          <span className="text-[11px] text-muted-foreground/60 whitespace-nowrap">{unit}</span>
         )}
       </div>
     </div>
+  );
+}
+
+function FieldHint({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={120}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border/70 text-[10px] font-bold leading-none text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+            aria-label="Field help"
+          >
+            ?
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px] text-[11px] leading-relaxed">
+          {text}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

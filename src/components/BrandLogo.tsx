@@ -2,12 +2,12 @@ import { getBrandLogo, getBrandInitials } from "@/lib/brand-logos";
 
 interface BrandLogoProps {
   brand: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }
 
 export function BrandLogo({ brand, size = "sm" }: BrandLogoProps) {
   const logo = getBrandLogo(brand);
-  const dim = size === "md" ? "h-7 w-7" : "h-5 w-5";
+  const dim = size === "lg" ? "h-10 w-10" : size === "md" ? "h-8 w-8" : "h-6 w-6";
 
   if (logo) {
     return (
@@ -22,8 +22,8 @@ export function BrandLogo({ brand, size = "sm" }: BrandLogoProps) {
 
   // Fallback: initials in a neutral circle
   const initials = getBrandInitials(brand);
-  const fallbackDim = size === "md" ? "w-7 h-7" : "w-5 h-5";
-  const textSize = size === "md" ? "text-[9px]" : "text-[7px]";
+  const fallbackDim = size === "lg" ? "w-10 h-10" : size === "md" ? "w-8 h-8" : "w-6 h-6";
+  const textSize = size === "lg" ? "text-[11px]" : size === "md" ? "text-[10px]" : "text-[8px]";
 
   return (
     <div

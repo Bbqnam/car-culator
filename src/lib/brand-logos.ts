@@ -42,8 +42,35 @@ const BRAND_LOGOS: Record<string, string> = {
   BYD: bydLogo,
 };
 
+const BRAND_ACCENTS: Record<string, string> = {
+  Volvo: "#0f5fb3",
+  Tesla: "#cc0000",
+  Volkswagen: "#0d3f8f",
+  BMW: "#1f6ed4",
+  Toyota: "#c8102e",
+  Kia: "#ab1e2d",
+  Hyundai: "#003e7e",
+  Skoda: "#0f7f4f",
+  Polestar: "#5b6168",
+  "Mercedes-Benz": "#111111",
+  Audi: "#bb0a30",
+  Ford: "#003478",
+  Renault: "#b07a00",
+  Mazda: "#9e2236",
+  Cupra: "#a05a2c",
+  Nissan: "#5f6368",
+  Peugeot: "#003f7f",
+  SEAT: "#c41230",
+  MG: "#b1131a",
+  BYD: "#cc1f2f",
+};
+
 export function getBrandLogo(brand: string): string | null {
   return BRAND_LOGOS[brand] || null;
+}
+
+export function getBrandAccent(brand: string): string {
+  return BRAND_ACCENTS[brand] || "#1f2937";
 }
 
 export function getBrandInitials(brand: string): string {
