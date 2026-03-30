@@ -5,6 +5,7 @@ const FUEL_STYLES: Record<FuelType, string> = {
   electric: "bg-fuel-electric-soft text-fuel-electric",
   petrol: "bg-fuel-petrol-soft text-fuel-petrol",
   diesel: "bg-fuel-diesel-soft text-fuel-diesel",
+  hybrid: "bg-fuel-hybrid-soft text-fuel-hybrid",
 };
 
 export function FuelBadge({ fuelType }: { fuelType: FuelType }) {
@@ -13,6 +14,7 @@ export function FuelBadge({ fuelType }: { fuelType: FuelType }) {
     electric: language === "sv" ? "El" : "Electric",
     petrol: language === "sv" ? "Bensin" : "Petrol",
     diesel: "Diesel",
+    hybrid: language === "sv" ? "Hybrid" : "Hybrid",
   };
 
   return (

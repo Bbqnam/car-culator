@@ -1,4 +1,4 @@
-import { FuelType } from "./car-types";
+import { FUEL_TYPE_ORDER, FuelType, PriceSource } from "./car-types";
 
 export interface CarModel {
   model: string;
@@ -15,6 +15,54 @@ export interface CarBrand {
   brand: string;
   models: CarModel[];
 }
+
+export interface HistoricalPriceEstimate {
+  priceSek: number | null;
+  sampleSize: number;
+  basis: "exact_model" | "similar_model" | "brand_fuel" | "brand" | "brand_anchor" | "fuel_type" | "global" | "none";
+}
+
+export interface PurchasePriceEstimate {
+  priceSek: number;
+  sampleSize: number;
+  basis: HistoricalPriceEstimate["basis"] | "local_model";
+  priceSource: PriceSource;
+}
+
+const BRAND_NAME_ALIASES: Record<string, string> = {
+  "alfa romeo": "Alfa Romeo",
+  "aston martin": "Aston Martin",
+  "bugatti rimac": "Bugatti",
+  "great wall": "Great Wall",
+  "gwm": "Great Wall",
+  "land rover": "Land Rover",
+  "mercedes benz": "Mercedes-Benz",
+  "mercedes-benz": "Mercedes-Benz",
+  "rolls royce": "Rolls-Royce",
+  "vw": "Volkswagen",
+};
+
+const BRAND_PRICE_ANCHORS: Partial<Record<string, Partial<Record<FuelType, number>>>> = {
+  "Alfa Romeo": { petrol: 620000, diesel: 660000, hybrid: 760000, electric: 820000 },
+  "Aston Martin": { petrol: 2900000, hybrid: 3400000, electric: 3200000 },
+  Bentley: { petrol: 2600000, hybrid: 2900000, electric: 2500000 },
+  Bugatti: { petrol: 18000000, hybrid: 20000000, electric: 28000000 },
+  Buick: { petrol: 480000, hybrid: 540000, electric: 560000 },
+  Cadillac: { petrol: 780000, diesel: 820000, hybrid: 860000, electric: 980000 },
+  Chevrolet: { petrol: 520000, diesel: 540000, hybrid: 620000, electric: 580000 },
+  Corvette: { petrol: 1400000, hybrid: 1700000 },
+  Ferrari: { petrol: 3800000, hybrid: 4500000, electric: 4200000 },
+  GMC: { petrol: 700000, diesel: 760000, electric: 900000 },
+  Jaguar: { petrol: 920000, diesel: 980000, hybrid: 1100000, electric: 980000 },
+  Lamborghini: { petrol: 4500000, hybrid: 5200000, electric: 4800000 },
+  Lexus: { petrol: 760000, hybrid: 820000, electric: 840000 },
+  Lincoln: { petrol: 850000, hybrid: 920000, electric: 980000 },
+  Lotus: { petrol: 1300000, hybrid: 1450000, electric: 1150000 },
+  Maserati: { petrol: 1500000, hybrid: 1650000, electric: 1850000 },
+  McLaren: { petrol: 3300000, hybrid: 4200000, electric: 3800000 },
+  Porsche: { petrol: 1250000, diesel: 1180000, hybrid: 1350000, electric: 1100000 },
+  "Rolls-Royce": { petrol: 4200000, hybrid: 4500000, electric: 5200000 },
+};
 
 export const carDatabase: CarBrand[] = [
   {
@@ -57,7 +105,7 @@ export const carDatabase: CarBrand[] = [
     brand: "BMW",
     models: [
       { model: "320i", purchasePrice: 420000, fuelType: "petrol", fuelConsumption: 6.8, taxCost: 1900, serviceCost: 6500 },
-      { model: "330e", purchasePrice: 480000, fuelType: "petrol", fuelConsumption: 2.0, taxCost: 500, serviceCost: 6000 },
+      { model: "330e", purchasePrice: 480000, fuelType: "hybrid", fuelConsumption: 2.0, taxCost: 500, serviceCost: 6000 },
       { model: "iX3", purchasePrice: 580000, fuelType: "electric", fuelConsumption: 18.5, taxCost: 360, serviceCost: 3500 },
       { model: "iX1", purchasePrice: 470000, fuelType: "electric", fuelConsumption: 17, taxCost: 360, serviceCost: 3200 },
       { model: "X1 sDrive18i", purchasePrice: 390000, fuelType: "petrol", fuelConsumption: 7.0, taxCost: 1700, serviceCost: 5500 },
@@ -69,13 +117,13 @@ export const carDatabase: CarBrand[] = [
   {
     brand: "Toyota",
     models: [
-      { model: "Corolla 1.8 Hybrid", purchasePrice: 290000, fuelType: "petrol", fuelConsumption: 4.5, taxCost: 1100, serviceCost: 3800 },
-      { model: "Corolla Cross Hybrid", purchasePrice: 350000, fuelType: "petrol", fuelConsumption: 5.0, taxCost: 1200, serviceCost: 4000 },
-      { model: "RAV4 2.5 Hybrid", purchasePrice: 410000, fuelType: "petrol", fuelConsumption: 5.6, taxCost: 1500, serviceCost: 4200 },
-      { model: "Yaris 1.5 Hybrid", purchasePrice: 230000, fuelType: "petrol", fuelConsumption: 3.8, taxCost: 900, serviceCost: 3200 },
+      { model: "Corolla 1.8 Hybrid", purchasePrice: 290000, fuelType: "hybrid", fuelConsumption: 4.5, taxCost: 1100, serviceCost: 3800 },
+      { model: "Corolla Cross Hybrid", purchasePrice: 350000, fuelType: "hybrid", fuelConsumption: 5.0, taxCost: 1200, serviceCost: 4000 },
+      { model: "RAV4 2.5 Hybrid", purchasePrice: 410000, fuelType: "hybrid", fuelConsumption: 5.6, taxCost: 1500, serviceCost: 4200 },
+      { model: "Yaris 1.5 Hybrid", purchasePrice: 230000, fuelType: "hybrid", fuelConsumption: 3.8, taxCost: 900, serviceCost: 3200 },
       { model: "bZ4X", purchasePrice: 460000, fuelType: "electric", fuelConsumption: 16.7, taxCost: 360, serviceCost: 2800 },
-      { model: "C-HR Hybrid", purchasePrice: 340000, fuelType: "petrol", fuelConsumption: 4.8, taxCost: 1100, serviceCost: 3800 },
-      { model: "Camry Hybrid", purchasePrice: 380000, fuelType: "petrol", fuelConsumption: 4.9, taxCost: 1300, serviceCost: 4000 },
+      { model: "C-HR Hybrid", purchasePrice: 340000, fuelType: "hybrid", fuelConsumption: 4.8, taxCost: 1100, serviceCost: 3800 },
+      { model: "Camry Hybrid", purchasePrice: 380000, fuelType: "hybrid", fuelConsumption: 4.9, taxCost: 1300, serviceCost: 4000 },
     ],
   },
   {
@@ -147,7 +195,7 @@ export const carDatabase: CarBrand[] = [
     models: [
       { model: "Focus 1.0 EcoBoost", purchasePrice: 280000, fuelType: "petrol", fuelConsumption: 5.8, taxCost: 1300, serviceCost: 4000 },
       { model: "Puma 1.0 EcoBoost", purchasePrice: 300000, fuelType: "petrol", fuelConsumption: 6.0, taxCost: 1400, serviceCost: 4200 },
-      { model: "Kuga 2.5 PHEV", purchasePrice: 410000, fuelType: "petrol", fuelConsumption: 1.4, taxCost: 500, serviceCost: 4500 },
+      { model: "Kuga 2.5 PHEV", purchasePrice: 410000, fuelType: "hybrid", fuelConsumption: 1.4, taxCost: 500, serviceCost: 4500 },
       { model: "Mustang Mach-E", purchasePrice: 520000, fuelType: "electric", fuelConsumption: 18, taxCost: 360, serviceCost: 3200 },
       { model: "Explorer EV", purchasePrice: 550000, fuelType: "electric", fuelConsumption: 19, taxCost: 360, serviceCost: 3500 },
     ],
@@ -232,18 +280,275 @@ export function getBrands(): string[] {
   return carDatabase.map((b) => b.brand).sort();
 }
 
+function canonicalizeDatabaseBrand(brand: string): string {
+  const trimmedBrand = brand.trim();
+  if (!trimmedBrand) return "";
+
+  return BRAND_NAME_ALIASES[trimmedBrand.toLowerCase()] ?? trimmedBrand;
+}
+
 export function getModels(brand: string): CarModel[] {
-  return carDatabase.find((b) => b.brand === brand)?.models ?? [];
+  const canonicalBrand = canonicalizeDatabaseBrand(brand);
+  return carDatabase.find((b) => b.brand === canonicalBrand)?.models ?? [];
 }
 
 export function findCarModel(brand: string, model: string): CarModel | undefined {
-  return carDatabase.find((b) => b.brand === brand)?.models.find((m) => m.model === model);
+  const canonicalBrand = canonicalizeDatabaseBrand(brand);
+  return carDatabase.find((b) => b.brand === canonicalBrand)?.models.find((m) => m.model === model);
+}
+
+function normalizeModelKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function inferFuelTypeFromText(value: string): FuelType | null {
+  const normalized = value.toLowerCase();
+
+  if (
+    /\b(296 gtb|296 gts|296 speciale|296 speciale a|sf90|revuelto|artura|e-ray|e-hybrid|urus se)\b/.test(normalized)
+  ) {
+    return "hybrid";
+  }
+
+  if (
+    /\b(electric|bev|battery electric)\b/.test(normalized) ||
+    normalized.includes("mach-e") ||
+    normalized.includes(" e-tron") ||
+    normalized.startsWith("e-")
+  ) {
+    return "electric";
+  }
+
+  if (/\b(hybrid|phev|plug-in|plugin|hev)\b/.test(normalized)) {
+    return "hybrid";
+  }
+
+  if (/\b(diesel|tdi|dci|hdi|cdi|crdi|d-4d|ecoblue|multijet)\b/.test(normalized)) {
+    return "diesel";
+  }
+
+  if (/\b(petrol|gasoline|tsi|tfsi|gdi|ecoboost|puretech|skyactiv-g)\b/.test(normalized)) {
+    return "petrol";
+  }
+
+  // Many FuelEconomy option labels for combustion cars only expose engine specs.
+  if (
+    /\b\d+\s*cyl\b/.test(normalized) ||
+    /\b\d+(?:[.,]\d+)?\s*l\b/.test(normalized) ||
+    /\bturbo\b/.test(normalized)
+  ) {
+    return "petrol";
+  }
+
+  return null;
+}
+
+function getModelTokens(model: string): string[] {
+  return model
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function averagePurchasePrice(models: CarModel[]): number | null {
+  if (models.length === 0) return null;
+  const total = models.reduce((sum, item) => sum + item.purchasePrice, 0);
+  return Math.round(total / models.length / 1000) * 1000;
+}
+
+function roundToNearestThousand(value: number): number {
+  return Math.round(value / 1000) * 1000;
+}
+
+function getModelYearMultiplier(modelYear: number, fuelType: FuelType): number {
+  if (!Number.isFinite(modelYear) || modelYear <= 0) return 1;
+
+  const currentYear = new Date().getFullYear();
+  const ageYears = Math.max(0, currentYear - modelYear);
+  const futureYears = Math.max(0, modelYear - currentYear);
+
+  const firstYearRetention = fuelType === "electric"
+    ? 0.82
+    : fuelType === "hybrid"
+      ? 0.85
+      : fuelType === "diesel"
+        ? 0.86
+        : 0.87;
+  const annualRetention = fuelType === "electric"
+    ? 0.89
+    : fuelType === "hybrid"
+      ? 0.91
+      : fuelType === "diesel"
+        ? 0.92
+        : 0.91;
+  const floor = fuelType === "electric" ? 0.18 : 0.15;
+
+  if (ageYears === 0) {
+    return 1 + Math.min(futureYears, 2) * 0.04;
+  }
+
+  if (ageYears === 1) {
+    return firstYearRetention;
+  }
+
+  return Math.max(floor, firstYearRetention * Math.pow(annualRetention, ageYears - 1));
+}
+
+function applyModelYearAdjustment(priceSek: number, modelYear: number, fuelType: FuelType): number {
+  return roundToNearestThousand(priceSek * getModelYearMultiplier(modelYear, fuelType));
+}
+
+function getBrandPriceAnchor(brand: string, fuelType: FuelType): number | null {
+  const anchors = BRAND_PRICE_ANCHORS[canonicalizeDatabaseBrand(brand)];
+  if (!anchors) return null;
+
+  return anchors[fuelType] ?? anchors.petrol ?? anchors.hybrid ?? anchors.electric ?? anchors.diesel ?? null;
+}
+
+export function inferAvailableFuelTypes(
+  brand: string,
+  model: string,
+  optionLabels: string[] = [],
+): FuelType[] {
+  const exactModel = findCarModel(brand, model);
+  if (exactModel) return [exactModel.fuelType];
+
+  const inferredModelFuelType = inferFuelTypeFromText(model);
+  if (inferredModelFuelType) return [inferredModelFuelType];
+
+  const brandModels = getModels(brand);
+  const normalizedModel = normalizeModelKey(model);
+  const modelTokens = new Set(getModelTokens(model));
+  const availableFuelTypes = new Set<FuelType>();
+
+  brandModels.forEach((item) => {
+    const candidateKey = normalizeModelKey(item.model);
+    if (!candidateKey) return;
+
+    const candidateTokens = getModelTokens(item.model);
+    const matchesFamily =
+      candidateKey.includes(normalizedModel) ||
+      normalizedModel.includes(candidateKey) ||
+      candidateTokens.some((token) => modelTokens.has(token));
+
+    if (matchesFamily) {
+      availableFuelTypes.add(item.fuelType);
+    }
+  });
+
+  optionLabels.forEach((label) => {
+    const inferredFuelType = inferFuelTypeFromText(`${model} ${label}`);
+    if (inferredFuelType) {
+      availableFuelTypes.add(inferredFuelType);
+    }
+  });
+
+  if (availableFuelTypes.size === 0) {
+    return [...FUEL_TYPE_ORDER];
+  }
+
+  return FUEL_TYPE_ORDER.filter((fuelType) => availableFuelTypes.has(fuelType));
+}
+
+export function findHistoricalPriceEstimate(
+  brand: string,
+  model: string,
+  fuelType: FuelType,
+): HistoricalPriceEstimate {
+  const brandModels = getModels(brand);
+  const normalizedModel = normalizeModelKey(model);
+  const modelTokens = new Set(getModelTokens(model));
+
+  const exactModelMatches = brandModels.filter((item) => normalizeModelKey(item.model) === normalizedModel);
+  const exactPrice = averagePurchasePrice(exactModelMatches);
+  if (exactPrice) {
+    return { priceSek: exactPrice, sampleSize: exactModelMatches.length, basis: "exact_model" };
+  }
+
+  const similarModelMatches = brandModels.filter((item) => {
+    const candidateKey = normalizeModelKey(item.model);
+    if (!candidateKey) return false;
+    if (candidateKey.includes(normalizedModel) || normalizedModel.includes(candidateKey)) return true;
+
+    const candidateTokens = getModelTokens(item.model);
+    return candidateTokens.some((token) => modelTokens.has(token));
+  });
+  const similarPrice = averagePurchasePrice(similarModelMatches);
+  if (similarPrice) {
+    return { priceSek: similarPrice, sampleSize: similarModelMatches.length, basis: "similar_model" };
+  }
+
+  const brandFuelMatches = brandModels.filter((item) => item.fuelType === fuelType);
+  const brandFuelPrice = averagePurchasePrice(brandFuelMatches);
+  if (brandFuelPrice) {
+    return { priceSek: brandFuelPrice, sampleSize: brandFuelMatches.length, basis: "brand_fuel" };
+  }
+
+  const brandPrice = averagePurchasePrice(brandModels);
+  if (brandPrice) {
+    return { priceSek: brandPrice, sampleSize: brandModels.length, basis: "brand" };
+  }
+
+  const brandAnchorPrice = getBrandPriceAnchor(brand, fuelType);
+  if (brandAnchorPrice) {
+    return { priceSek: brandAnchorPrice, sampleSize: 1, basis: "brand_anchor" };
+  }
+
+  const allModels = carDatabase.flatMap((item) => item.models);
+  const fuelTypeMatches = allModels.filter((item) => item.fuelType === fuelType);
+  const fuelTypePrice = averagePurchasePrice(fuelTypeMatches);
+  if (fuelTypePrice) {
+    return { priceSek: fuelTypePrice, sampleSize: fuelTypeMatches.length, basis: "fuel_type" };
+  }
+
+  const globalPrice = averagePurchasePrice(allModels);
+  if (globalPrice) {
+    return { priceSek: globalPrice, sampleSize: allModels.length, basis: "global" };
+  }
+
+  return { priceSek: null, sampleSize: 0, basis: "none" };
+}
+
+export function estimatePurchasePrice(
+  brand: string,
+  model: string,
+  fuelType: FuelType,
+  modelYear: number,
+): PurchasePriceEstimate {
+  const exactModel = findCarModel(brand, model);
+  if (exactModel) {
+    return {
+      priceSek: applyModelYearAdjustment(exactModel.purchasePrice, modelYear, exactModel.fuelType),
+      sampleSize: 1,
+      basis: "local_model",
+      priceSource: "historical_average",
+    };
+  }
+
+  const historicalEstimate = findHistoricalPriceEstimate(brand, model, fuelType);
+  if (!historicalEstimate.priceSek) {
+    return {
+      priceSek: 0,
+      sampleSize: historicalEstimate.sampleSize,
+      basis: historicalEstimate.basis,
+      priceSource: "missing",
+    };
+  }
+
+  return {
+    priceSek: applyModelYearAdjustment(historicalEstimate.priceSek, modelYear, fuelType),
+    sampleSize: historicalEstimate.sampleSize,
+    basis: historicalEstimate.basis,
+    priceSource: "historical_average",
+  };
 }
 
 export function getDefaultFuelPrice(fuelType: FuelType): number {
   switch (fuelType) {
     case "petrol": return 18.5;
     case "diesel": return 20.0;
+    case "hybrid": return 18.5;
     case "electric": return 2.2;
   }
 }

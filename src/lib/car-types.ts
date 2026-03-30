@@ -1,6 +1,9 @@
-export type FuelType = "petrol" | "diesel" | "electric";
+export type FuelType = "petrol" | "diesel" | "hybrid" | "electric";
+export const FUEL_TYPE_ORDER: FuelType[] = ["petrol", "diesel", "hybrid", "electric"];
 export type Currency = "SEK" | "EUR" | "VND";
 export type FinancingMode = "cash" | "loan" | "leasing";
+export type TaxCostSource = "estimated" | "manual";
+export type PriceSource = "market_listings" | "official_new" | "historical_average" | "manual" | "missing";
 
 export interface LoanInputs {
   downPayment: number;
@@ -24,14 +27,18 @@ export interface CarInput {
   brand: string;
   model: string;
   name: string;
+  modelYear: number;
   purchasePrice: number;
+  priceSource: PriceSource;
   ownershipYears: number;
   annualMileage: number;
   fuelType: FuelType;
   fuelConsumption: number;
+  estimatedCo2GKm: number | null;
   fuelPrice: number;
   insuranceCost: number;
   taxCost: number;
+  taxCostSource: TaxCostSource;
   serviceCost: number;
   isConfigured: boolean;
   financingMode: FinancingMode;
@@ -270,14 +277,18 @@ export function createEmptyCar(id: string): CarInput {
     brand: "",
     model: "",
     name: "",
+    modelYear: new Date().getFullYear(),
     purchasePrice: 0,
+    priceSource: "missing",
     ownershipYears: 5,
     annualMileage: 15000,
     fuelType: "petrol",
     fuelConsumption: 0,
+    estimatedCo2GKm: null,
     fuelPrice: 18.5,
     insuranceCost: 6000,
     taxCost: 0,
+    taxCostSource: "estimated",
     serviceCost: 0,
     isConfigured: false,
     financingMode: "cash",

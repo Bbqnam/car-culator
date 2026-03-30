@@ -58,6 +58,8 @@ export default {
           "electric-soft": "hsl(var(--fuel-electric-soft))",
           petrol: "hsl(var(--fuel-petrol))",
           "petrol-soft": "hsl(var(--fuel-petrol-soft))",
+          hybrid: "hsl(var(--fuel-hybrid))",
+          "hybrid-soft": "hsl(var(--fuel-hybrid-soft))",
           diesel: "hsl(var(--fuel-diesel))",
           "diesel-soft": "hsl(var(--fuel-diesel-soft))",
         },

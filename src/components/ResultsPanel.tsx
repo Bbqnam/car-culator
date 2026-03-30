@@ -1561,10 +1561,7 @@ function ChartTab({
                     : "bg-transparent text-muted-foreground border border-border/40 hover:text-foreground hover:border-border/70 opacity-60 hover:opacity-90",
                 ].join(" ")}
               >
-                {logo
-                  ? <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />
-                  : <span className="w-3.5 h-3.5 rounded-full bg-muted flex items-center justify-center text-[7px] font-bold text-muted-foreground shrink-0">{car.brand?.slice(0, 1) ?? "?"}</span>
-                }
+                {logo && <img src={logo} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />}
                 <span className="truncate max-w-[120px]">{car.displayName}</span>
                 {isWinnerCar && <span className="ml-0.5 text-highlight text-[9px]">★</span>}
               </button>

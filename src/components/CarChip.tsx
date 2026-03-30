@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CarInput, CarResult, Currency, formatCurrency } from "@/lib/car-types";
+import { CarInput, CarResult, Currency, PriceSource, formatCurrency } from "@/lib/car-types";
 import { getBrandAccent } from "@/lib/brand-logos";
 import { BrandLogo } from "@/components/BrandLogo";
 import { FuelBadge } from "@/components/FuelBadge";
@@ -17,6 +17,50 @@ interface CarChipProps {
   onOpen: () => void;
   onRemove: () => void;
   onDuplicate: () => void;
+}
+
+function getPriceSourceLabel(
+  source: PriceSource,
+  t: (text: { en: string; sv: string }) => string,
+): string {
+  switch (source) {
+    case "market_listings":
+      return t({ en: "Swedish market listings", sv: "Svenska marknadsannonser" });
+    case "official_new":
+      return t({ en: "Official new price", sv: "Officiellt nypris" });
+    case "historical_average":
+      return t({ en: "Historical / average", sv: "Historiskt / genomsnitt" });
+    case "manual":
+      return t({ en: "Manual", sv: "Manuellt" });
+    default:
+      return t({ en: "Missing", sv: "Saknas" });
+  }
+}
+
+function splitDisplayName(name: string, brand: string) {
+  const trimmedName = name.trim();
+  const trimmedBrand = brand.trim();
+
+  if (!trimmedName || !trimmedBrand) {
+    return { brandPart: "", modelPart: trimmedName };
+  }
+
+  const normalizedName = trimmedName.toLowerCase();
+  const normalizedBrand = trimmedBrand.toLowerCase();
+
+  if (!normalizedName.startsWith(normalizedBrand)) {
+    return { brandPart: "", modelPart: trimmedName };
+  }
+
+  const modelPart = trimmedName.slice(trimmedBrand.length).trim();
+  if (!modelPart) {
+    return { brandPart: "", modelPart: trimmedName };
+  }
+
+  return {
+    brandPart: trimmedBrand,
+    modelPart,
+  };
 }
 
 export function CarChip({
@@ -76,15 +120,17 @@ export function CarChip({
   const consumptionValue = `${formatDecimal(car.fuelConsumption)} ${fuelLabel}`;
   const fuelPriceValue = `${formatDecimal(car.fuelPrice)} ${fuelPriceLabel}`;
   const brandAccent = car.brand ? getBrandAccent(car.brand) : "#1f2937";
+  const displayName = car.name || t({ en: `Car ${index + 1}`, sv: `Bil ${index + 1}` });
+  const { brandPart, modelPart } = splitDisplayName(displayName, car.brand);
 
   return (
     <div className="w-full min-h-[188px] rounded-xl border border-border/70 bg-card relative group overflow-hidden">
       <div className="p-4">
-        <div className="flex justify-between gap-2.5">
+        <div className="relative">
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className="min-w-0 text-left flex-1"
+            className="min-w-0 w-full text-left"
             aria-expanded={expanded}
             aria-label={t({
               en: `Toggle details for ${car.name || `Car ${index + 1}`}`,
@@ -98,25 +144,55 @@ export function CarChip({
                 {FINANCING_LABELS[car.financingMode]}
               </span>
             </div>
-            <div className="min-h-[3.25rem] pr-1">
-              <p
-                className="text-[1.15rem] font-extrabold leading-snug line-clamp-2"
-                style={{ color: brandAccent }}
-              >
-                {car.name || t({ en: `Car ${index + 1}`, sv: `Bil ${index + 1}` })}
-              </p>
-              <span
-                className="mt-1 block h-0.5 w-12 rounded-full"
-                style={{ backgroundColor: brandAccent }}
-              />
+            <div className={`min-h-[3.25rem] pr-1 ${isWinner ? "winner-name-frame" : ""}`}>
+              {brandPart ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
+                    <span>{brandPart}</span>
+                    <span className="inline-flex items-center gap-1.5" aria-hidden="true">
+                      <span
+                        className="block h-px w-5 rounded-full"
+                        style={{ backgroundColor: brandAccent, opacity: 0.45 }}
+                      />
+                      <span
+                        className="block h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: brandAccent, opacity: 0.75 }}
+                      />
+                    </span>
+                  </div>
+                  <p
+                    className="text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    style={{ color: brandAccent }}
+                  >
+                    {modelPart}
+                  </p>
+                  <span
+                    className="block h-0.5 max-w-full rounded-full"
+                    style={{ backgroundColor: brandAccent, width: `${Math.min(Math.max(modelPart.length * 0.58, 3.5), 11)}rem` }}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p
+                    className="text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    style={{ color: brandAccent }}
+                  >
+                    {displayName}
+                  </p>
+                  <span
+                    className="block h-0.5 max-w-full rounded-full"
+                    style={{ backgroundColor: brandAccent, width: `${Math.min(Math.max(displayName.length * 0.58, 3.5), 11)}rem` }}
+                  />
+                </div>
+              )}
             </div>
           </button>
 
-          <div className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity relative z-[2] flex gap-1">
+          <div className="absolute top-0 right-0 z-[2] flex items-center gap-1 rounded-full bg-card/95 px-1 py-1 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={onOpen}
-              className="p-1 rounded hover:bg-secondary"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
               aria-label={t({ en: "Edit car", sv: "Redigera bil" })}
             >
               <Pencil className="w-3 h-3" />
@@ -125,7 +201,7 @@ export function CarChip({
               <button
                 type="button"
                 onClick={onDuplicate}
-                className="p-1 rounded hover:bg-secondary"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
                 aria-label={t({ en: "Duplicate car", sv: "Duplicera bil" })}
               >
                 <Copy className="w-3 h-3" />
@@ -135,7 +211,7 @@ export function CarChip({
               <button
                 type="button"
                 onClick={onRemove}
-                className="p-1 rounded hover:bg-secondary"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
                 aria-label={t({ en: "Remove car", sv: "Ta bort bil" })}
               >
                 <Trash2 className="w-3 h-3" />
@@ -198,6 +274,7 @@ export function CarChip({
           <div className="space-y-0.5">
             <DetailRow label={t({ en: "Financing", sv: "Finansiering" })} value={FINANCING_LABELS[car.financingMode]} />
             <DetailRow label={t({ en: "Purchase price", sv: "Köpesumma" })} value={formatCurrency(car.purchasePrice, currency)} />
+            <DetailRow label={t({ en: "Price source", sv: "Priskälla" })} value={getPriceSourceLabel(car.priceSource, t)} />
             <DetailRow label={t({ en: "Duration", sv: "Period" })} value={durationLabel} />
             <DetailRow
               label={t({ en: "Mileage", sv: "Körsträcka" })}

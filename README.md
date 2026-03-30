@@ -16,6 +16,9 @@ A comprehensive car ownership decision tool that helps you compare multiple vehi
 - **Winner Selection**: Automatically highlights the most cost-effective option
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 - **AI Comparison Chat (CarAI)**: Floating chat widget with live comparison context from the cars currently configured
+- **Live Brand & Model Catalog**: Brand and model lists can be expanded from free APIs, not only from the built-in local database
+- **Free Live Consumption Lookup**: Import fuel/energy consumption from `FuelEconomy.gov` for U.S. matches and from the official EU EV catalog for more non-U.S. electric models
+- **Swedish Tax Estimate**: Calculates an estimated annual Swedish vehicle tax and clearly labels it as an estimate, not an exact official number
 
 ## Tech Stack
 
@@ -58,7 +61,7 @@ A comprehensive car ownership decision tool that helps you compare multiple vehi
 
 ### Optional: Run the CarAI API proxy (for AI chat)
 
-The chat widget calls a backend proxy so your AI provider API key stays server-side.
+The chat widget calls a backend proxy so your AI provider API key stays server-side. The same local proxy also enables the EU electric-vehicle fallback lookup used by the car form.
 
 1. In a separate terminal, export your xAI key:
    ```bash
@@ -107,10 +110,13 @@ If you have Ollama installed, you can use the chat with no cloud API key:
 
 1. **Add Cars**: Click the "+" button to add up to 6 cars for comparison
 2. **Configure Each Car**:
+   - Pick a brand and model from the built-in database plus live API catalog matches
    - Enter basic details (brand, model, purchase price)
+   - Set model year if you want a better Swedish tax estimate
    - Set ownership duration and annual mileage
    - Specify fuel type and consumption rates
    - Input costs for insurance, taxes, and service
+   - Optionally import official fuel data from `FuelEconomy.gov` and let the app recalculate Swedish tax as an estimate
 3. **Select Financing**: Choose between cash, loan, or leasing for each car
 4. **Review Results**: View detailed cost breakdowns and compare options
 5. **Switch Language/Currency**: Use the dropdowns in the header to toggle language and currency (SEK, EUR, VND)
@@ -184,3 +190,5 @@ This project is private and proprietary.
 ## Disclaimer
 
 This tool provides estimates based on the information you provide. Actual costs may vary depending on market conditions, location, and other factors. Always consult with financial and automotive professionals for personalized advice.
+
+Swedish vehicle tax values shown in the app are estimates based on fuel type, model year, fuel consumption, and publicly described Transportstyrelsen CO2 rules. They are helpful for comparison, but they are not guaranteed to match the exact tax for a specific registered vehicle.
