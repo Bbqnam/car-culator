@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 interface CommercialTrialSectionProps {
   winner: CarResult;
@@ -19,29 +20,30 @@ interface CommercialTrialSectionProps {
 
 type OfferView = "financing" | "leasing" | "retailer";
 
-const SORT_OPTIONS: { key: SortMode; label: string }[] = [
-  { key: "best", label: "Best offer first" },
-  { key: "lowest-monthly", label: "Lowest monthly cost" },
-  { key: "lowest-total", label: "Lowest total cost" },
-  { key: "lowest-upfront", label: "Lowest upfront cost" },
-  { key: "fastest-approval", label: "Fastest approval" },
-];
-
-const OFFER_TYPE_LABEL: Record<string, string> = {
-  bank_loan: "Bank loan",
-  dealer_financing: "Dealer financing",
-  private_leasing: "Private leasing",
-  balloon_financing: "Balloon financing",
-  retailer_listing: "Retailer listing",
-};
-
 export function CommercialTrialSection({ winner, currency }: CommercialTrialSectionProps) {
+  const { t, language } = useI18n();
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAllOffers, setShowAllOffers] = useState(false);
   const [offerView, setOfferView] = useState<OfferView>("financing");
   const [sortMode, setSortMode] = useState<SortMode>("best");
 
-  const trialData = useMemo(() => buildCommercialTrialData(winner), [winner]);
+  const sortOptions: { key: SortMode; label: string }[] = [
+    { key: "best", label: t({ en: "Best offer first", sv: "Bästa erbjudande först" }) },
+    { key: "lowest-monthly", label: t({ en: "Lowest monthly cost", sv: "Lägst månadskostnad" }) },
+    { key: "lowest-total", label: t({ en: "Lowest total cost", sv: "Lägst totalkostnad" }) },
+    { key: "lowest-upfront", label: t({ en: "Lowest upfront cost", sv: "Lägst kontantinsats" }) },
+    { key: "fastest-approval", label: t({ en: "Fastest approval", sv: "Snabbast godkännande" }) },
+  ];
+
+  const offerTypeLabel: Record<string, string> = {
+    bank_loan: t({ en: "Bank loan", sv: "Banklån" }),
+    dealer_financing: t({ en: "Dealer financing", sv: "Återförsäljarfinansiering" }),
+    private_leasing: t({ en: "Private leasing", sv: "Privatleasing" }),
+    balloon_financing: t({ en: "Balloon financing", sv: "Ballongfinansiering" }),
+    retailer_listing: t({ en: "Dealer listing", sv: "Återförsäljarannons" }),
+  };
+
+  const trialData = useMemo(() => buildCommercialTrialData(winner, language), [winner, language]);
 
   const sortedFinancing = useMemo(
     () => trialData.sortOffers(trialData.financingOffers, sortMode),
@@ -61,26 +63,34 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/70">
-            Financing & deals
+            {t({ en: "Financing & offers", sv: "Finansiering & erbjudanden" })}
           </p>
           <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">
-            Commercialization trial mode
+            {t({ en: "Commercial trial mode", sv: "Kommersiellt testläge" })}
           </h3>
           <p className="text-xs text-muted-foreground max-w-[620px]">
-            Concept preview focused on loan, leasing, and retailer offer options.
-            No live pricing or real-time partner APIs are used in this prototype.
+            {t({
+              en: "Concept preview focused on loans, leasing, and dealer offers. No live pricing or real-time partner API connections are used in this prototype.",
+              sv: "Konceptförhandsvisning med fokus på lån, leasing och återförsäljarerbjudanden. Inga livepriser eller realtidskopplingar mot partner-API:er används i den här prototypen.",
+            })}
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge className="bg-foreground/90 text-background border-transparent">Prototype</Badge>
-          <Badge variant="secondary" className="text-[10px]">Mock partner data</Badge>
+          <Badge className="bg-foreground/90 text-background border-transparent">
+            {t({ en: "Prototype", sv: "Prototyp" })}
+          </Badge>
+          <Badge variant="secondary" className="text-[10px]">
+            {t({ en: "Simulated partner data", sv: "Simulerad partnerdata" })}
+          </Badge>
           <Button
             size="sm"
             variant={isExpanded ? "secondary" : "outline"}
             className="h-8"
             onClick={() => setIsExpanded((prev) => !prev)}
           >
-            {isExpanded ? "Hide offer details" : "Show offer details"}
+            {isExpanded
+              ? t({ en: "Hide offer details", sv: "Dölj erbjudandedetaljer" })
+              : t({ en: "Show offer details", sv: "Visa erbjudandedetaljer" })}
           </Button>
         </div>
       </div>
@@ -88,14 +98,14 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
       {!isExpanded && (
         <div className="rounded-xl border border-border/60 bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
           <p className="text-xs text-muted-foreground">
-            Best financing:{" "}
+            {t({ en: "Best financing:", sv: "Bästa finansiering:" })}{" "}
             <span className="font-semibold text-foreground">
               {trialData.bestFinancing.providerName}
             </span>{" "}
-            ({formatCurrency(trialData.bestFinancing.monthlyCost, currency)}/mo)
+            ({formatCurrency(trialData.bestFinancing.monthlyCost, currency)}{language === "sv" ? "/mån" : "/mo"})
           </p>
           <p className="text-xs text-muted-foreground">
-            Best retailer:{" "}
+            {t({ en: "Best dealer:", sv: "Bästa återförsäljare:" })}{" "}
             <span className="font-semibold text-foreground">
               {trialData.bestRetailer.providerName}
             </span>{" "}
@@ -107,14 +117,18 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
       {isExpanded && (
         <>
           <div className="grid gap-3 lg:grid-cols-2">
-            <BestFinancingCard offer={trialData.bestFinancing} currency={currency} />
+            <BestFinancingCard offer={trialData.bestFinancing} currency={currency} offerTypeLabel={offerTypeLabel} />
             <BestRetailerCard offer={trialData.bestRetailer} currency={currency} />
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-semibold text-foreground">Smart recommendation layer</h4>
-              <Badge variant="secondary" className="text-[10px]">Decision support</Badge>
+              <h4 className="text-sm font-semibold text-foreground">
+                {t({ en: "Recommendation layer", sv: "Smart rekommendationslager" })}
+              </h4>
+              <Badge variant="secondary" className="text-[10px]">
+                {t({ en: "Decision support", sv: "Beslutsstöd" })}
+              </Badge>
             </div>
 
             <div className="grid gap-2 md:grid-cols-2">
@@ -130,9 +144,14 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
           <div className="rounded-xl border border-border/60 bg-card/75">
             <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-semibold text-foreground">All offers</h4>
+                <h4 className="text-sm font-semibold text-foreground">
+                  {t({ en: "All offers", sv: "Alla erbjudanden" })}
+                </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Expand to compare financing, leasing, and retailer options.
+                  {t({
+                    en: "Expand to compare financing, leasing, and dealer options.",
+                    sv: "Expandera för att jämföra finansiering, leasing och återförsäljaralternativ.",
+                  })}
                 </p>
               </div>
 
@@ -142,7 +161,9 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 onClick={() => setShowAllOffers((prev) => !prev)}
                 className="h-8"
               >
-                {showAllOffers ? "Hide all offers" : "Compare all offers"}
+                {showAllOffers
+                  ? t({ en: "Hide all offers", sv: "Dölj alla erbjudanden" })
+                  : t({ en: "Compare all offers", sv: "Jämför alla erbjudanden" })}
               </Button>
             </div>
 
@@ -151,9 +172,9 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 <div className="flex flex-wrap items-center justify-between gap-2.5">
                   <div className="inline-flex rounded-lg bg-secondary/70 p-0.5">
                     {([
-                      { key: "financing" as OfferView, label: "Financing" },
-                      { key: "leasing" as OfferView, label: "Leasing" },
-                      { key: "retailer" as OfferView, label: "Retailers" },
+                      { key: "financing" as OfferView, label: t({ en: "Financing", sv: "Finansiering" }) },
+                      { key: "leasing" as OfferView, label: t({ en: "Leasing", sv: "Leasing" }) },
+                      { key: "retailer" as OfferView, label: t({ en: "Dealers", sv: "Återförsäljare" }) },
                     ]).map((item) => (
                       <button
                         key={item.key}
@@ -172,13 +193,13 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                   </div>
 
                   <label className="text-xs text-muted-foreground flex items-center gap-2">
-                    Sort by
+                    {t({ en: "Sort by", sv: "Sortera efter" })}
                     <select
                       value={sortMode}
                       onChange={(e) => setSortMode(e.target.value as SortMode)}
                       className="h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
                     >
-                      {SORT_OPTIONS.map((opt) => (
+                      {sortOptions.map((opt) => (
                         <option key={opt.key} value={opt.key}>{opt.label}</option>
                       ))}
                     </select>
@@ -191,11 +212,11 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                     currency={currency}
                     renderExtra={(offer) => (
                       <>
-                        <MiniField label="Interest" value={`${offer.apr.toFixed(1)}% APR`} />
-                        <MiniField label="Term" value={`${offer.durationMonths} months`} />
+                        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={`${offer.apr.toFixed(1)}% APR`} />
+                        <MiniField label={t({ en: "Term", sv: "Löptid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
                         <MiniField
-                          label="Residual / balloon"
-                          value={offer.residualValue ? formatCurrency(offer.residualValue, currency) : "None"}
+                          label={t({ en: "Residual value / balloon", sv: "Restvärde / restskuld" })}
+                          value={offer.residualValue ? formatCurrency(offer.residualValue, currency) : t({ en: "None", sv: "Ingen" })}
                         />
                       </>
                     )}
@@ -215,21 +236,27 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
 
           <div className="rounded-xl border border-border/60 bg-card p-4 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-semibold text-foreground">Future integrations</h4>
-              <Badge variant="outline" className="text-[10px]">Investor demo</Badge>
+              <h4 className="text-sm font-semibold text-foreground">
+                {t({ en: "Upcoming integrations", sv: "Kommande integrationer" })}
+              </h4>
+              <Badge variant="outline" className="text-[10px]">
+                {t({ en: "Investor demo", sv: "Investerardemo" })}
+              </Badge>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              This layer is designed to connect with partner feeds for banks, leasing providers, retailers,
-              insurance quoting, credit assessment, and vehicle marketplace inventory.
+              {t({
+                en: "This layer is designed to connect to partner feeds for banks, leasing providers, and dealers, as well as insurance pricing, credit scoring, and marketplace inventory.",
+                sv: "Lagret är utformat för att kunna kopplas till partnerflöden för banker, leasingbolag och återförsäljare, försäkringsprissättning, kreditbedömning och fordonsmarknadsplatsers lagerdata.",
+              })}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {[
-                "Banks",
-                "Leasing companies",
-                "Dealers",
-                "Insurance partners",
-                "Credit assessment",
-                "Vehicle marketplaces",
+                t({ en: "Banks", sv: "Banker" }),
+                t({ en: "Leasing providers", sv: "Leasingbolag" }),
+                t({ en: "Dealers", sv: "Återförsäljare" }),
+                t({ en: "Insurance partners", sv: "Försäkringspartners" }),
+                t({ en: "Credit scoring", sv: "Kreditbedömning" }),
+                t({ en: "Vehicle marketplaces", sv: "Fordonsmarknadsplatser" }),
               ].map((item) => (
                 <span key={item} className="text-[10px] font-medium px-2 py-1 rounded-full bg-secondary text-muted-foreground">
                   {item}
@@ -243,7 +270,16 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
   );
 }
 
-function BestFinancingCard({ offer, currency }: { offer: FinancingOffer; currency: Currency }) {
+function BestFinancingCard({
+  offer,
+  currency,
+  offerTypeLabel,
+}: {
+  offer: FinancingOffer;
+  currency: Currency;
+  offerTypeLabel: Record<string, string>;
+}) {
+  const { t } = useI18n();
   return (
     <article className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -251,22 +287,22 @@ function BestFinancingCard({ offer, currency }: { offer: FinancingOffer; currenc
           <ProviderMark name={offer.providerName} />
           <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
-            Best financing match
+            {t({ en: "Top financing match", sv: "Bästa finansieringsmatchning" })}
           </p>
           <h4 className="text-sm font-semibold text-foreground mt-1">{offer.providerName}</h4>
-          <p className="text-[11px] text-muted-foreground">{OFFER_TYPE_LABEL[offer.offerType]}</p>
+          <p className="text-[11px] text-muted-foreground">{offerTypeLabel[offer.offerType]}</p>
           </div>
         </div>
         <OfferBadgeGroup badge={offer.badge} sponsored={offer.isSponsored} />
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-        <MiniField label="Monthly cost" value={formatCurrency(offer.monthlyCost, currency)} strong />
-        <MiniField label="Down payment" value={formatCurrency(offer.upfrontCost, currency)} />
-        <MiniField label="Interest" value={`${offer.apr.toFixed(1)}% APR`} />
-        <MiniField label="Contract term" value={`${offer.durationMonths} months`} />
-        <MiniField label="Total estimate" value={formatCurrency(offer.totalCost, currency)} />
-        <MiniField label="Approval speed" value={offer.approvalSpeed} />
+        <MiniField label={t({ en: "Monthly cost", sv: "Månadskostnad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
+        <MiniField label={t({ en: "Upfront payment", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
+        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={`${offer.apr.toFixed(1)}% APR`} />
+        <MiniField label={t({ en: "Contract term", sv: "Avtalstid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
+        <MiniField label={t({ en: "Estimated total cost", sv: "Beräknad totalkostnad" })} value={formatCurrency(offer.totalCost, currency)} />
+        <MiniField label={t({ en: "Approval speed", sv: "Godkännandetid" })} value={offer.approvalSpeed} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -280,6 +316,7 @@ function BestFinancingCard({ offer, currency }: { offer: FinancingOffer; currenc
 }
 
 function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency: Currency }) {
+  const { t } = useI18n();
   return (
     <article className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -287,7 +324,7 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
           <ProviderMark name={offer.providerName} />
           <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
-            Best retailer option
+            {t({ en: "Top dealer option", sv: "Bästa återförsäljaralternativ" })}
           </p>
           <h4 className="text-sm font-semibold text-foreground mt-1">{offer.providerName}</h4>
           <p className="text-[11px] text-muted-foreground">{offer.condition} - {offer.dealerLocation}</p>
@@ -297,16 +334,18 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-        <MiniField label="Monthly estimate" value={formatCurrency(offer.monthlyCost, currency)} strong />
-        <MiniField label="Upfront" value={formatCurrency(offer.upfrontCost, currency)} />
-        <MiniField label="Delivery" value={offer.deliveryEstimate} />
-        <MiniField label="Availability" value={offer.availability} />
-        <MiniField label="Warranty" value={offer.warrantyInfo} />
-        <MiniField label="Approval" value={offer.approvalSpeed} />
+        <MiniField label={t({ en: "Estimated monthly cost", sv: "Beräknad månadskostnad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
+        <MiniField label={t({ en: "Upfront payment", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
+        <MiniField label={t({ en: "Delivery", sv: "Leverans" })} value={offer.deliveryEstimate} />
+        <MiniField label={t({ en: "Availability", sv: "Tillgänglighet" })} value={offer.availability} />
+        <MiniField label={t({ en: "Warranty", sv: "Garanti" })} value={offer.warrantyInfo} />
+        <MiniField label={t({ en: "Approval", sv: "Godkännande" })} value={offer.approvalSpeed} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">Retailer lead / referral trial</p>
+        <p className="text-[11px] text-muted-foreground">
+          {t({ en: "Test area for dealer leads and referrals", sv: "Testyta för återförsäljarleads och hänvisningar" })}
+        </p>
         <Button size="sm" variant="outline" className="h-8" asChild>
           <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
         </Button>
@@ -324,6 +363,7 @@ function OfferList({
   currency: Currency;
   renderExtra?: (offer: CommercialOfferBase) => ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
       {offers.map((offer, index) => (
@@ -339,17 +379,23 @@ function OfferList({
               <ProviderMark name={offer.providerName} small />
               <div>
                 <p className="text-xs font-semibold text-foreground">{offer.providerName}</p>
-                <p className="text-[11px] text-muted-foreground">{OFFER_TYPE_LABEL[offer.offerType]}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {offer.offerType === "bank_loan" && t({ en: "Bank loan", sv: "Banklån" })}
+                  {offer.offerType === "dealer_financing" && t({ en: "Dealer financing", sv: "Återförsäljarfinansiering" })}
+                  {offer.offerType === "private_leasing" && t({ en: "Private leasing", sv: "Privatleasing" })}
+                  {offer.offerType === "balloon_financing" && t({ en: "Balloon financing", sv: "Ballongfinansiering" })}
+                  {offer.offerType === "retailer_listing" && t({ en: "Dealer listing", sv: "Återförsäljarannons" })}
+                </p>
               </div>
             </div>
             <OfferBadgeGroup badge={offer.badge} sponsored={offer.isSponsored} compact />
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <MiniField label="Monthly" value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label="Upfront" value={formatCurrency(offer.upfrontCost, currency)} />
-            <MiniField label="Total" value={formatCurrency(offer.totalCost, currency)} />
-            <MiniField label="Approval" value={offer.approvalSpeed} />
+            <MiniField label={t({ en: "Monthly", sv: "Månad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
+            <MiniField label={t({ en: "Upfront", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
+            <MiniField label={t({ en: "Total", sv: "Totalt" })} value={formatCurrency(offer.totalCost, currency)} />
+            <MiniField label={t({ en: "Approval", sv: "Godkännande" })} value={offer.approvalSpeed} />
             {renderExtra?.(offer)}
           </div>
 
@@ -366,6 +412,7 @@ function OfferList({
 }
 
 function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: Currency }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
       {offers.map((offer, index) => (
@@ -381,23 +428,23 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
               <ProviderMark name={offer.providerName} small />
               <div>
                 <p className="text-xs font-semibold text-foreground">{offer.providerName}</p>
-                <p className="text-[11px] text-muted-foreground">Private leasing</p>
+                <p className="text-[11px] text-muted-foreground">{t({ en: "Private leasing", sv: "Privatleasing" })}</p>
               </div>
             </div>
             <OfferBadgeGroup badge={offer.badge} sponsored={offer.isSponsored} compact />
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <MiniField label="Monthly fee" value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label="Initial payment" value={formatCurrency(offer.initialPayment, currency)} />
-            <MiniField label="Contract" value={`${offer.durationMonths} months`} />
-            <MiniField label="Annual mileage" value={`${offer.annualMileage.toLocaleString("sv-SE")} km`} />
-            <MiniField label="Excess mileage" value={`${formatCurrency(offer.excessMileageCost, currency)}/km`} />
-            <MiniField label="Included services" value={offer.includedServices.join(", ")} />
-            <MiniField label="Wear & tear" value={offer.wearAndTearNote} />
-            <MiniField label="End of contract" value={offer.endOfContractCondition} />
-            <MiniField label="Total estimate" value={formatCurrency(offer.totalCost, currency)} />
-            <MiniField label="Approval" value={offer.approvalSpeed} />
+            <MiniField label={t({ en: "Monthly fee", sv: "Månadsavgift" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
+            <MiniField label={t({ en: "Initial payment", sv: "Första betalning" })} value={formatCurrency(offer.initialPayment, currency)} />
+            <MiniField label={t({ en: "Contract", sv: "Avtal" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
+            <MiniField label={t({ en: "Annual mileage", sv: "Årlig körsträcka" })} value={`${offer.annualMileage.toLocaleString("sv-SE")} km`} />
+            <MiniField label={t({ en: "Excess mileage", sv: "Övermil" })} value={`${formatCurrency(offer.excessMileageCost, currency)}/km`} />
+            <MiniField label={t({ en: "Included services", sv: "Inkluderade tjänster" })} value={offer.includedServices.join(", ")} />
+            <MiniField label={t({ en: "Wear and tear", sv: "Slitage" })} value={offer.wearAndTearNote} />
+            <MiniField label={t({ en: "At contract end", sv: "Vid avtalsslut" })} value={offer.endOfContractCondition} />
+            <MiniField label={t({ en: "Estimated total cost", sv: "Beräknad totalkostnad" })} value={formatCurrency(offer.totalCost, currency)} />
+            <MiniField label={t({ en: "Approval", sv: "Godkännande" })} value={offer.approvalSpeed} />
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -413,6 +460,7 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
 }
 
 function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency: Currency }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
       {offers.map((offer, index) => (
@@ -435,18 +483,20 @@ function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency:
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <MiniField label="Delivery" value={offer.deliveryEstimate} />
-            <MiniField label="Availability" value={offer.availability} />
-            <MiniField label="Warranty" value={offer.warrantyInfo} />
-            <MiniField label="Monthly" value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label="Upfront" value={formatCurrency(offer.upfrontCost, currency)} />
-            <MiniField label="Total" value={formatCurrency(offer.totalCost, currency)} />
+            <MiniField label={t({ en: "Delivery", sv: "Leverans" })} value={offer.deliveryEstimate} />
+            <MiniField label={t({ en: "Availability", sv: "Tillgänglighet" })} value={offer.availability} />
+            <MiniField label={t({ en: "Warranty", sv: "Garanti" })} value={offer.warrantyInfo} />
+            <MiniField label={t({ en: "Monthly", sv: "Månad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
+            <MiniField label={t({ en: "Upfront", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
+            <MiniField label={t({ en: "Total", sv: "Totalt" })} value={formatCurrency(offer.totalCost, currency)} />
             <MiniField label="APR" value={`${offer.apr.toFixed(1)}%`} />
-            <MiniField label="Term" value={`${offer.durationMonths} months`} />
+            <MiniField label={t({ en: "Term", sv: "Löptid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground">Lead generation / referral placement</p>
+            <p className="text-[11px] text-muted-foreground">
+              {t({ en: "Test area for lead generation and referrals", sv: "Testyta för leadgenerering och hänvisningar" })}
+            </p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
               <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
             </Button>
@@ -475,6 +525,7 @@ function OfferBadgeGroup({
   sponsored: boolean;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
       {badge && (
@@ -490,7 +541,7 @@ function OfferBadgeGroup({
           "rounded-full border border-border/70 bg-secondary text-muted-foreground text-[10px] font-medium",
           compact ? "px-2 py-0.5" : "px-2.5 py-1"
         )}>
-          Sponsored
+          {t({ en: "Sponsored", sv: "Sponsrad" })}
         </span>
       )}
     </div>

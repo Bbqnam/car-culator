@@ -1,4 +1,5 @@
 import { CarResult } from "@/lib/car-types";
+import type { Language } from "@/lib/i18n";
 
 export type ProviderType =
   | "bank"
@@ -18,17 +19,30 @@ export type OfferType =
 export type SourceType = "mock" | "partner_feed" | "manual";
 
 export type ApprovalSpeed =
+  | "Direkt"
+  | "< 2 minuter"
+  | "Inom 24 h"
+  | "1-2 arbetsdagar"
+  | "Återförsäljare ringer upp"
   | "Instant"
   | "< 2 minutes"
   | "Within 24h"
   | "1-2 business days"
-  | "Dealer callback";
+  | "Dealer calls back";
 
 export type OfferBadge =
+  | "Bäst värde"
+  | "Lägst månadskostnad"
+  | "Snabbt godkännande"
+  | "Låg kontantinsats"
+  | "Flexibelt avtal"
+  | "Partnererbjudande"
+  | "Sponsrad"
+  | "Populär"
   | "Best value"
   | "Lowest monthly cost"
   | "Fast approval"
-  | "Low upfront"
+  | "Low upfront cost"
   | "Flexible contract"
   | "Partner offer"
   | "Sponsored"
@@ -98,6 +112,7 @@ export interface FinancingOffer extends CommercialOfferBase {
 
 export interface LeasingOffer extends CommercialOfferBase {
   offerType: "private_leasing";
+  customerType: "private" | "business";
   initialPayment: number;
   annualMileage: number;
   excessMileageCost: number;
@@ -124,9 +139,9 @@ export interface RetailerOffer {
   badge?: OfferBadge;
   ctaLabel: string;
   ctaUrl: string;
-  availability: "In stock" | "Few left" | "Order only";
+  availability: string;
   sourceType: SourceType;
-  condition: "New" | "Used";
+  condition: string;
   deliveryEstimate: string;
   dealerLocation: string;
   warrantyInfo: string;
@@ -156,12 +171,21 @@ export interface CommercialTrialData {
 }
 
 const SPEED_SCORE: Record<ApprovalSpeed, number> = {
+  Direkt: 1,
+  "< 2 minuter": 2,
+  "Inom 24 h": 3,
+  "1-2 arbetsdagar": 4,
+  "Återförsäljare ringer upp": 5,
   Instant: 1,
   "< 2 minutes": 2,
   "Within 24h": 3,
   "1-2 business days": 4,
-  "Dealer callback": 5,
+  "Dealer calls back": 5,
 };
+
+function l(language: Language, en: string, sv: string): string {
+  return language === "sv" ? sv : en;
+}
 
 function scoreOffer(offer: CommercialOfferBase): number {
   return offer.monthlyCost * 1.2 + offer.totalCost * 0.6 + offer.upfrontCost * 0.2 + SPEED_SCORE[offer.approvalSpeed] * 120;
@@ -189,7 +213,7 @@ function sortRetailerOffers(offers: RetailerOffer[], mode: SortMode): RetailerOf
   return sortOffers(offers, mode);
 }
 
-export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
+export function buildCommercialTrialData(car: CarResult, language: Language = "en"): CommercialTrialData {
   const monthlyBase = Math.max(car.monthlyCost, 3200);
   const totalBase = Math.max(car.totalOwnershipCost, monthlyBase * 60);
   const annualMileageEstimate = 15000;
@@ -202,7 +226,10 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       logoText: "NB",
       isPartner: true,
       isSponsored: false,
-      trustSignals: ["FSA regulated", "Digital signing"],
+      trustSignals: [
+        l(language, "Regulated financial institution", "FI-reglerad"),
+        l(language, "Digital signing", "Digital signering"),
+      ],
     },
     {
       id: "scandia-credit",
@@ -211,7 +238,10 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       logoText: "SC",
       isPartner: true,
       isSponsored: false,
-      trustSignals: ["Fast approval", "No setup fee"],
+      trustSignals: [
+        l(language, "Fast approval", "Snabbt godkännande"),
+        l(language, "No setup fee", "Ingen uppläggningsavgift"),
+      ],
     },
     {
       id: "dealer-flow",
@@ -220,16 +250,22 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       logoText: "DF",
       isPartner: true,
       isSponsored: true,
-      trustSignals: ["Dealer integrated", "Campaign APR"],
+      trustSignals: [
+        l(language, "Dealer-integrated", "Återförsäljarintegrerad"),
+        l(language, "Campaign rate", "Kampanjränta"),
+      ],
     },
     {
       id: "flexi-lease",
-      providerName: "FlexiLease Sverige",
+      providerName: l(language, "FlexiLease Sweden", "FlexiLease Sverige"),
       providerType: "leasing_company",
       logoText: "FL",
       isPartner: true,
       isSponsored: false,
-      trustSignals: ["Service included", "Mileage protection"],
+      trustSignals: [
+        l(language, "Service included", "Service ingår"),
+        l(language, "Mileage coverage", "Körsträckeskydd"),
+      ],
     },
     {
       id: "auto-market",
@@ -238,7 +274,10 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       logoText: "AM",
       isPartner: false,
       isSponsored: false,
-      trustSignals: ["Marketplace feed", "Verified listings"],
+      trustSignals: [
+        l(language, "Marketplace feed", "Marknadsplatsflöde"),
+        l(language, "Verified listings", "Verifierade annonser"),
+      ],
     },
     {
       id: "city-auto",
@@ -247,7 +286,10 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       logoText: "CA",
       isPartner: true,
       isSponsored: true,
-      trustSignals: ["Partner showroom", "Trade-in support"],
+      trustSignals: [
+        l(language, "Partner showroom", "Partnerhall"),
+        l(language, "Trade-in support", "Inbytesstöd"),
+      ],
     },
   ];
 
@@ -267,12 +309,12 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 60,
       mileagePerYear: annualMileageEstimate,
       residualValue: 0,
-      approvalSpeed: "Within 24h",
+      approvalSpeed: l(language, "Within 24h", "Inom 24 h") as ApprovalSpeed,
       isSponsored: false,
-      badge: "Best value",
-      ctaLabel: "Apply now",
+      badge: l(language, "Best value", "Bäst värde") as OfferBadge,
+      ctaLabel: l(language, "Apply now", "Ansök nu"),
       ctaUrl: "#apply-nordic-bank",
-      availability: "Open for applications",
+      availability: l(language, "Open for applications", "Öppen för ansökan"),
       sourceType: "mock",
     },
     {
@@ -290,12 +332,12 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 72,
       mileagePerYear: annualMileageEstimate,
       residualValue: 0,
-      approvalSpeed: "< 2 minutes",
+      approvalSpeed: l(language, "< 2 minutes", "< 2 minuter") as ApprovalSpeed,
       isSponsored: false,
-      badge: "Lowest monthly cost",
-      ctaLabel: "Check eligibility",
+      badge: l(language, "Lowest monthly cost", "Lägst månadskostnad") as OfferBadge,
+      ctaLabel: l(language, "Check eligibility", "Kontrollera behörighet"),
       ctaUrl: "#check-scandia",
-      availability: "Pre-check available",
+      availability: l(language, "Pre-check available", "Förhandskontroll tillgänglig"),
       sourceType: "mock",
     },
     {
@@ -313,12 +355,12 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 48,
       mileagePerYear: annualMileageEstimate,
       residualValue: 130000,
-      approvalSpeed: "Instant",
+      approvalSpeed: l(language, "Instant", "Direkt") as ApprovalSpeed,
       isSponsored: true,
-      badge: "Low upfront",
-      ctaLabel: "View offer",
+      badge: l(language, "Low upfront cost", "Låg kontantinsats") as OfferBadge,
+      ctaLabel: l(language, "View offer", "Visa erbjudande"),
       ctaUrl: "#view-dealerflow",
-      availability: "Campaign this month",
+      availability: l(language, "Campaign this month", "Kampanj denna månad"),
       sourceType: "mock",
     },
     {
@@ -336,12 +378,12 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 60,
       mileagePerYear: annualMileageEstimate,
       residualValue: 0,
-      approvalSpeed: "Dealer callback",
+      approvalSpeed: l(language, "Dealer calls back", "Återförsäljare ringer upp") as ApprovalSpeed,
       isSponsored: true,
-      badge: "Partner offer",
-      ctaLabel: "See details",
+      badge: l(language, "Partner offer", "Partnererbjudande") as OfferBadge,
+      ctaLabel: l(language, "See details", "Se detaljer"),
       ctaUrl: "#details-dealer-plan",
-      availability: "Available at partner dealers",
+      availability: l(language, "Available via partner dealers", "Tillgängligt hos partneråterförsäljare"),
       sourceType: "mock",
     },
   ];
@@ -350,7 +392,7 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
     {
       id: "lease-1",
       providerId: "flexi-lease",
-      providerName: "FlexiLease Sverige",
+      providerName: l(language, "FlexiLease Sweden", "FlexiLease Sverige"),
       providerType: "leasing_company",
       offerType: "private_leasing",
       apr: 0,
@@ -362,19 +404,24 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 36,
       mileagePerYear: 15000,
       residualValue: 0,
-      approvalSpeed: "Within 24h",
+      approvalSpeed: l(language, "Within 24h", "Inom 24 h") as ApprovalSpeed,
       isSponsored: false,
-      badge: "Popular",
-      ctaLabel: "View leasing offer",
+      badge: l(language, "Popular", "Populär") as OfferBadge,
+      ctaLabel: l(language, "View lease offer", "Visa leasingerbjudande"),
       ctaUrl: "#lease-flexi",
-      availability: "Available nationwide",
+      availability: l(language, "Available nationwide", "Tillgängligt i hela landet"),
       sourceType: "mock",
+      customerType: "private",
       initialPayment: 20000,
       annualMileage: 15000,
       excessMileageCost: 1.8,
-      includedServices: ["Service", "Road assistance", "Winter tyres"],
-      wearAndTearNote: "Normal usage included; cosmetic marks may be charged.",
-      endOfContractCondition: "Return or upgrade",
+      includedServices: [
+        l(language, "Service", "Service"),
+        l(language, "Roadside assistance", "Vägassistans"),
+        l(language, "Winter tires", "Vinterdäck"),
+      ],
+      wearAndTearNote: l(language, "Normal use is included; cosmetic damage may be charged.", "Normalt bruk ingår; kosmetiska skador kan debiteras."),
+      endOfContractCondition: l(language, "Return or upgrade", "Återlämna eller uppgradera"),
     },
     {
       id: "lease-2",
@@ -391,19 +438,23 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 36,
       mileagePerYear: 12000,
       residualValue: 0,
-      approvalSpeed: "Instant",
+      approvalSpeed: l(language, "Instant", "Direkt") as ApprovalSpeed,
       isSponsored: true,
-      badge: "Fast approval",
-      ctaLabel: "See details",
+      badge: l(language, "Fast approval", "Snabbt godkännande") as OfferBadge,
+      ctaLabel: l(language, "See details", "Se detaljer"),
       ctaUrl: "#lease-dealerflow",
-      availability: "Limited campaign stock",
+      availability: l(language, "Limited campaign inventory", "Begränsat kampanjlager"),
       sourceType: "mock",
+      customerType: "business",
       initialPayment: 39000,
       annualMileage: 12000,
       excessMileageCost: 2.1,
-      includedServices: ["Service", "Warranty extension"],
-      wearAndTearNote: "Interior wear above normal standard is chargeable.",
-      endOfContractCondition: "Return only",
+      includedServices: [
+        l(language, "Service", "Service"),
+        l(language, "Extended warranty", "Förlängd garanti"),
+      ],
+      wearAndTearNote: l(language, "Interior wear beyond normal use is charged.", "Invändigt slitage över normal nivå debiteras."),
+      endOfContractCondition: l(language, "Return only", "Endast återlämning"),
     },
     {
       id: "lease-3",
@@ -420,19 +471,24 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       durationMonths: 48,
       mileagePerYear: 18000,
       residualValue: 0,
-      approvalSpeed: "< 2 minutes",
+      approvalSpeed: l(language, "< 2 minutes", "< 2 minuter") as ApprovalSpeed,
       isSponsored: false,
-      badge: "Flexible contract",
-      ctaLabel: "Check eligibility",
+      badge: l(language, "Flexible contract", "Flexibelt avtal") as OfferBadge,
+      ctaLabel: l(language, "Check eligibility", "Kontrollera behörighet"),
       ctaUrl: "#lease-scandia",
-      availability: "Open for digital contracts",
+      availability: l(language, "Open for digital contracts", "Öppen för digitala avtal"),
       sourceType: "mock",
+      customerType: "private",
       initialPayment: 12000,
       annualMileage: 18000,
       excessMileageCost: 1.4,
-      includedServices: ["Service", "Tyre swap", "Road assistance"],
-      wearAndTearNote: "Fair wear accepted under partner policy.",
-      endOfContractCondition: "Return, extend, or buy-out",
+      includedServices: [
+        l(language, "Service", "Service"),
+        l(language, "Tire change", "Däckskifte"),
+        l(language, "Roadside assistance", "Vägassistans"),
+      ],
+      wearAndTearNote: l(language, "Normal wear is accepted according to partner policy.", "Normalt slitage accepteras enligt partnerpolicy."),
+      endOfContractCondition: l(language, "Return, extend, or buy out", "Återlämna, förläng eller köp loss"),
     },
   ];
 
@@ -450,17 +506,17 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       nominalRate: 4.8,
       effectiveRate: 5.2,
       durationMonths: 60,
-      approvalSpeed: "Within 24h",
+      approvalSpeed: l(language, "Within 24h", "Inom 24 h") as ApprovalSpeed,
       isSponsored: true,
-      badge: "Partner offer",
-      ctaLabel: "Contact dealer",
+      badge: l(language, "Partner offer", "Partnererbjudande") as OfferBadge,
+      ctaLabel: l(language, "Contact dealer", "Kontakta återförsäljare"),
       ctaUrl: "#contact-city-auto",
-      availability: "In stock",
+      availability: l(language, "In stock", "I lager"),
       sourceType: "mock",
-      condition: "New",
-      deliveryEstimate: "Delivery in 3-5 days",
+      condition: l(language, "New", "Ny") as "Ny" | "Begagnad",
+      deliveryEstimate: l(language, "Delivery within 3-5 days", "Leverans inom 3-5 dagar"),
       dealerLocation: "Stockholm",
-      warrantyInfo: "5 years / 100,000 km",
+      warrantyInfo: l(language, "5 years / 100,000 km", "5 år / 100 000 km"),
     },
     {
       id: "ret-2",
@@ -475,17 +531,17 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       nominalRate: 4.5,
       effectiveRate: 5,
       durationMonths: 60,
-      approvalSpeed: "< 2 minutes",
+      approvalSpeed: l(language, "< 2 minutes", "< 2 minuter") as ApprovalSpeed,
       isSponsored: false,
-      badge: "Best value",
-      ctaLabel: "View listing",
+      badge: l(language, "Best value", "Bäst värde") as OfferBadge,
+      ctaLabel: l(language, "View listing", "Visa annons"),
       ctaUrl: "#view-automarket",
-      availability: "Few left",
+      availability: l(language, "Few left", "Få kvar"),
       sourceType: "mock",
-      condition: "Used",
-      deliveryEstimate: "Pickup or delivery in 7 days",
-      dealerLocation: "Gothenburg",
-      warrantyInfo: "12-month dealer warranty",
+      condition: l(language, "Used", "Begagnad") as "Ny" | "Begagnad",
+      deliveryEstimate: l(language, "Pickup/Delivery in 7 days", "Hämtning/Leverans inom 7 dagar"),
+      dealerLocation: "Göteborg",
+      warrantyInfo: l(language, "12-month dealer warranty", "12 månaders återförsäljargaranti"),
     },
     {
       id: "ret-3",
@@ -500,17 +556,17 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
       nominalRate: 5.1,
       effectiveRate: 5.9,
       durationMonths: 72,
-      approvalSpeed: "Dealer callback",
+      approvalSpeed: l(language, "Dealer calls back", "Återförsäljare ringer upp") as ApprovalSpeed,
       isSponsored: true,
-      badge: "Sponsored",
-      ctaLabel: "See retailer",
+      badge: l(language, "Sponsored", "Sponsrad") as OfferBadge,
+      ctaLabel: l(language, "See dealers", "Se återförsäljare"),
       ctaUrl: "#retailer-dealerflow",
-      availability: "Order only",
+      availability: l(language, "Factory order", "Beställningsvara"),
       sourceType: "mock",
-      condition: "New",
-      deliveryEstimate: "Factory order 6-10 weeks",
-      dealerLocation: "Malmo",
-      warrantyInfo: "3 years / 100,000 km",
+      condition: l(language, "New", "Ny") as "Ny" | "Begagnad",
+      deliveryEstimate: l(language, "Factory order 6-10 weeks", "Fabriksbeställning 6-10 veckor"),
+      dealerLocation: "Malmö",
+      warrantyInfo: l(language, "3 years / 100,000 km", "3 år / 100 000 km"),
     },
   ];
 
@@ -522,40 +578,50 @@ export function buildCommercialTrialData(car: CarResult): CommercialTrialData {
     {
       id: "rec-1",
       category: "lowest-monthly",
-      title: "Best for lowest monthly payment",
-      explanation: `${sortOffers(financingOffers, "lowest-monthly")[0].providerName} keeps the monthly commitment low with longer duration and lower cash pressure upfront.`,
+      title: l(language, "Best for lowest monthly cost", "Bäst för lägsta månadskostnad"),
+      explanation: language === "sv"
+        ? `${sortOffers(financingOffers, "lowest-monthly")[0].providerName} håller månadskostnaden nere med längre löptid och lägre inledande kontantinsats.`
+        : `${sortOffers(financingOffers, "lowest-monthly")[0].providerName} keeps monthly payments low through a longer term and lower upfront payment.`,
       offerId: sortOffers(financingOffers, "lowest-monthly")[0].id,
       sourceType: "mock",
     },
     {
       id: "rec-2",
       category: "long-term-ownership",
-      title: "Best if you want long-term ownership",
-      explanation: `${bestFinancing.providerName} has the strongest ownership economics based on projected total cost and rate profile.`,
+      title: l(language, "Best if you plan to own long-term", "Bäst om du vill äga bilen länge"),
+      explanation: language === "sv"
+        ? `${bestFinancing.providerName} ger den starkaste ägandekalkylen utifrån beräknad totalkostnad och ränteprofil.`
+        : `${bestFinancing.providerName} gives the strongest ownership case based on projected total cost and rate profile.`,
       offerId: bestFinancing.id,
       sourceType: "mock",
     },
     {
       id: "rec-3",
       category: "low-upfront",
-      title: "Best for low upfront cash",
-      explanation: `${sortOffers(financingOffers, "lowest-upfront")[0].providerName} offers the lowest initial payment among ownership options.`,
+      title: l(language, "Best for low upfront cost", "Bäst om du vill ha låg kontantinsats"),
+      explanation: language === "sv"
+        ? `${sortOffers(financingOffers, "lowest-upfront")[0].providerName} erbjuder lägst kontantinsats bland ägaralternativen.`
+        : `${sortOffers(financingOffers, "lowest-upfront")[0].providerName} offers the lowest upfront payment among ownership options.`,
       offerId: sortOffers(financingOffers, "lowest-upfront")[0].id,
       sourceType: "mock",
     },
     {
       id: "rec-4",
       category: "flexibility",
-      title: "Best for flexibility",
-      explanation: `${sortOffers(leasingOffers, "best")[0].providerName} allows easier end-of-term choices for upgrading or extending.`,
+      title: l(language, "Best for flexibility", "Bäst för flexibilitet"),
+      explanation: language === "sv"
+        ? `${sortOffers(leasingOffers, "best")[0].providerName} ger smidigare val vid avtalsslut för uppgradering eller förlängning.`
+        : `${sortOffers(leasingOffers, "best")[0].providerName} gives more flexibility at contract end for upgrade or extension.`,
       offerId: sortOffers(leasingOffers, "best")[0].id,
       sourceType: "mock",
     },
     {
       id: "rec-5",
       category: "predictable-monthly",
-      title: "Best for predictable monthly cost",
-      explanation: `${bestLeasing.providerName} includes more services in one fixed monthly plan for fewer ownership surprises.`,
+      title: l(language, "Best for predictable monthly costs", "Bäst för förutsägbar månadskostnad"),
+      explanation: language === "sv"
+        ? `${bestLeasing.providerName} samlar fler tjänster i en fast månadsplan och minskar risken för oväntade ägandekostnader.`
+        : `${bestLeasing.providerName} bundles more services into a fixed monthly plan and reduces the risk of unexpected ownership costs.`,
       offerId: bestLeasing.id,
       sourceType: "mock",
     },

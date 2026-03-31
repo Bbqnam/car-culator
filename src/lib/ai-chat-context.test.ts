@@ -53,18 +53,18 @@ describe("buildComparisonContext", () => {
       "SEK",
     );
 
-    expect(context).toContain("Cars compared: 2");
-    expect(context).toContain("Lowest monthly cost: Kia Niro EV");
+    expect(context).toContain("Antal jämförda bilar: 2");
+    expect(context).toContain("Lägst månadskostnad: Kia Niro EV");
     expect(context).toContain("1. Kia Niro EV");
     expect(context).toContain("2. BMW 330e");
-    expect(context).toContain("- Cost per km:");
+    expect(context).toContain("- Kostnad per km:");
   });
 
   it("falls back to general-mode guidance when no cars are configured", () => {
     const context = buildComparisonContext([], [], "SEK");
 
-    expect(context).toContain("No cars are configured yet.");
-    expect(context).toContain("general questions");
+    expect(context).toContain("Inga bilar är konfigurerade ännu.");
+    expect(context).toContain("allmänna frågor");
   });
 
   it("supports VND conversion in the generated context", () => {
@@ -85,7 +85,7 @@ describe("buildComparisonContext", () => {
 
     const context = buildComparisonContext([car], [calculateResults(car)], "VND");
 
-    expect(context).toContain("Comparison currency: VND");
+    expect(context).toContain("Jämförelsevaluta: VND");
     expect(context).toContain("VND");
   });
 });

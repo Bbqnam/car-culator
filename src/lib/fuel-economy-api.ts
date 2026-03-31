@@ -22,6 +22,10 @@ export interface FuelEconomyVehicle {
   estimatedCo2GKm: number;
 }
 
+function normalizeLookupText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function parseXml(xml: string): Document {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   const parserError = doc.querySelector("parsererror");
@@ -135,6 +139,42 @@ export async function fetchFuelEconomyOptions(
       label: getText(item, "text"),
     }))
     .filter((item) => item.id && item.label);
+}
+
+export async function fetchFuelEconomyModelYears(
+  make: string,
+  model: string,
+  minYear: number,
+  maxYear: number,
+): Promise<number[]> {
+  if (!make.trim() || !model.trim() || minYear > maxYear) return [];
+
+  const normalizedModel = normalizeLookupText(model);
+  const years = Array.from(
+    { length: maxYear - minYear + 1 },
+    (_, index) => maxYear - index,
+  );
+
+  const matches = await Promise.allSettled(
+    years.map(async (year) => {
+      const models = await fetchFuelEconomyModels(year, make);
+      const hasMatch = models.some((candidate) => {
+        const normalizedCandidate = normalizeLookupText(candidate);
+        return (
+          normalizedCandidate === normalizedModel ||
+          normalizedCandidate.includes(normalizedModel) ||
+          normalizedModel.includes(normalizedCandidate)
+        );
+      });
+      return hasMatch ? year : null;
+    }),
+  );
+
+  return matches
+    .filter((result): result is PromiseFulfilledResult<number | null> => result.status === "fulfilled")
+    .map((result) => result.value)
+    .filter((year): year is number => typeof year === "number")
+    .sort((a, b) => b - a);
 }
 
 export async function fetchFuelEconomyVehicle(

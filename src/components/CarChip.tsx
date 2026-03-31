@@ -144,7 +144,7 @@ export function CarChip({
                 {FINANCING_LABELS[car.financingMode]}
               </span>
             </div>
-            <div className={`min-h-[3.25rem] pr-1 ${isWinner ? "winner-name-frame" : ""}`}>
+            <div className="min-h-[3.25rem] pr-1">
               {brandPart ? (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
@@ -161,7 +161,7 @@ export function CarChip({
                     </span>
                   </div>
                   <p
-                    className="text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    className="text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug line-clamp-3"
                     style={{ color: brandAccent }}
                   >
                     {modelPart}
@@ -174,7 +174,7 @@ export function CarChip({
               ) : (
                 <div className="space-y-1">
                   <p
-                    className="text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    className="text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug line-clamp-3"
                     style={{ color: brandAccent }}
                   >
                     {displayName}
@@ -188,33 +188,33 @@ export function CarChip({
             </div>
           </button>
 
-          <div className="absolute top-0 right-0 z-[2] flex items-center gap-1 rounded-full bg-card/95 px-1 py-1 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className="mt-3 flex items-center justify-end gap-2 sm:absolute sm:top-0 sm:right-0 sm:z-[2] sm:mt-0 sm:gap-1 sm:rounded-full sm:bg-card/95 sm:px-1 sm:py-1 sm:shadow-sm sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
             <button
               type="button"
               onClick={onOpen}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background text-foreground hover:bg-secondary sm:h-7 sm:w-7 sm:rounded-md sm:border-transparent sm:bg-transparent"
               aria-label={t({ en: "Edit car", sv: "Redigera bil" })}
             >
-              <Pencil className="w-3 h-3" />
+              <Pencil className="w-4 h-4 sm:w-3 sm:h-3" />
             </button>
             {canDuplicate && (
               <button
                 type="button"
                 onClick={onDuplicate}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background text-foreground hover:bg-secondary sm:h-7 sm:w-7 sm:rounded-md sm:border-transparent sm:bg-transparent"
                 aria-label={t({ en: "Duplicate car", sv: "Duplicera bil" })}
               >
-                <Copy className="w-3 h-3" />
+                <Copy className="w-4 h-4 sm:w-3 sm:h-3" />
               </button>
             )}
             {canRemove && (
               <button
                 type="button"
                 onClick={onRemove}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background text-foreground hover:bg-secondary sm:h-7 sm:w-7 sm:rounded-md sm:border-transparent sm:bg-transparent"
                 aria-label={t({ en: "Remove car", sv: "Ta bort bil" })}
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-4 h-4 sm:w-3 sm:h-3" />
               </button>
             )}
           </div>
@@ -224,7 +224,7 @@ export function CarChip({
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className={`w-full mt-3 text-left rounded-lg border px-3 py-2.5 transition-colors ${
+            className={`w-full mt-3 text-left rounded-lg border px-3 py-3 transition-colors ${
               isWinner
                 ? "border-highlight/35 bg-highlight/10 hover:bg-highlight/15"
                 : "border-border/60 bg-secondary/25 hover:bg-secondary/40"
@@ -237,7 +237,7 @@ export function CarChip({
           >
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <p
-                className={`text-[1.28rem] font-bold leading-tight tabular-nums ${
+                className={`text-[1.18rem] sm:text-[1.28rem] font-bold leading-tight tabular-nums ${
                   isWinner ? "text-highlight" : "text-foreground"
                 }`}
               >
@@ -253,7 +253,7 @@ export function CarChip({
                 {t({ en: "Total cost", sv: "Total kostnad" })}
               </p>
               <p
-                className={`text-[1.02rem] font-semibold leading-none tabular-nums whitespace-nowrap ${
+                className={`text-[0.98rem] sm:text-[1.02rem] font-semibold leading-none tabular-nums whitespace-nowrap ${
                   isWinner ? "text-highlight" : "text-foreground"
                 }`}
               >

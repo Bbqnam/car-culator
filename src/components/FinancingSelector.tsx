@@ -27,7 +27,7 @@ export function FinancingSelector({ value, onChange }: FinancingSelectorProps) {
             onClick={() => onChange(m.value)}
             className={[
               "flex-1 flex items-center justify-center gap-1.5",
-              "text-xs font-semibold py-2 px-2 rounded-md",
+              "min-h-11 text-xs font-semibold px-2 rounded-md sm:min-h-10",
               "transition-all duration-150 select-none",
               active
                 ? "bg-white text-foreground shadow-sm border border-border/50"

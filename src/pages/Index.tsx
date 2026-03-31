@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { CarInput, Currency, calculateResults, createEmptyCar } from "@/lib/car-types";
 import { ResultsPanel } from "@/components/ResultsPanel";
-import { CommercialTrialSection } from "@/components/CommercialTrialSection";
 import { Plus } from "lucide-react";
 import { CarChip } from "@/components/CarChip";
 import { AddCarModal } from "@/components/AddCarModal";
@@ -24,19 +23,14 @@ const Index = () => {
     [configuredCars]
   );
   const comparisonContext = useMemo(
-    () => buildComparisonContext(configuredCars, results, currency),
-    [configuredCars, results, currency]
+    () => buildComparisonContext(configuredCars, results, currency, language),
+    [configuredCars, results, currency, language]
   );
 
   const winnerId = useMemo(() => {
     if (results.length === 0) return null;
     return [...results].sort((a, b) => a.monthlyCost - b.monthlyCost)[0]?.id ?? null;
   }, [results]);
-
-  const winner = useMemo(
-    () => (results.length > 0 ? [...results].sort((a, b) => a.monthlyCost - b.monthlyCost)[0] : null),
-    [results]
-  );
 
   const activeCar = cars.find((c) => c.id === activeCarId) ?? null;
   const activeCarIndex = activeCar ? cars.findIndex((c) => c.id === activeCar.id) : 0;
@@ -116,11 +110,11 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/60 bg-surface-raised/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:pl-10 xl:pr-14 2xl:pl-12 2xl:pr-16 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:pl-10 xl:pr-14 2xl:pl-12 2xl:pr-16 py-2 sm:h-14 sm:py-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 min-w-0">
             <img src="/logo.png" alt="Carculator logo" className="h-12 w-auto object-contain" />
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold tracking-tight">Carculator</span>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-lg font-bold tracking-tight shrink-0">Carculator</span>
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 {t({
                   en: "— Car ownership decision tool",
@@ -130,11 +124,11 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as typeof language)}
-              className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+              className="min-h-9 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
               aria-label={t({ en: "Language", sv: "Språk" })}
             >
               <option value="en">English</option>
@@ -143,27 +137,31 @@ const Index = () => {
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value as Currency)}
-              className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+              className="min-h-9 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
               aria-label={t({ en: "Currency", sv: "Valuta" })}
             >
               <option value="SEK">kr SEK</option>
               <option value="EUR">€ EUR</option>
+              <option value="USD">$ USD</option>
               <option value="VND">₫ VND</option>
             </select>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:pl-10 xl:pr-14 2xl:pl-12 2xl:pr-16 py-6 sm:py-8">
+      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:pl-10 xl:pr-14 2xl:pl-12 2xl:pr-16 py-6 pb-24 sm:py-8 sm:pb-8">
         <div className="space-y-6">
           <div className="flex flex-col lg:grid gap-5 lg:gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(460px,560px)] xl:grid-cols-[minmax(0,1.16fr)_minmax(500px,620px)] 2xl:grid-cols-[minmax(0,1.22fr)_minmax(520px,660px)]">
             <section className="min-w-0 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <h1 className="text-base font-semibold tracking-tight text-foreground">
                   {t({ en: "Your cars", sv: "Dina bilar" })}
                 </h1>
                 {cars.length < 6 && (
-                  <button onClick={addCar} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  <button
+                    onClick={addCar}
+                    className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     <Plus className="w-3.5 h-3.5" />
                     {t({ en: "Add car", sv: "Lägg till bil" })}
                   </button>
@@ -171,7 +169,38 @@ const Index = () => {
               </div>
 
               <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4 min-h-[240px] lg:min-h-[290px] flex flex-col">
-                <div className="overflow-x-auto pb-1 flex-1">
+                <div className="md:hidden flex flex-col gap-3">
+                  {cars.map((car, i) => {
+                    const result = results.find((r) => r.id === car.id);
+                    return (
+                      <CarChip
+                        key={car.id}
+                        car={car}
+                        index={i}
+                        currency={currency}
+                        result={result}
+                        isWinner={winnerId === car.id}
+                        canRemove={cars.length > 1}
+                        canDuplicate={cars.length < 6}
+                        onOpen={() => setActiveCarId(car.id)}
+                        onRemove={() => removeCar(car.id)}
+                        onDuplicate={() => duplicateCar(car.id)}
+                      />
+                    );
+                  })}
+                  {cars.length < 6 && (
+                    <button
+                      type="button"
+                      onClick={addCar}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-secondary/20 px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary/35"
+                    >
+                      <Plus className="w-4 h-4" />
+                      {t({ en: "Add another car", sv: "Lägg till en bil" })}
+                    </button>
+                  )}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto pb-1 flex-1">
                   <div
                     className="grid grid-flow-col gap-3 pr-3"
                     style={{ gridAutoColumns: "minmax(340px, calc((100% - 1.5rem) / 3))" }}
@@ -196,7 +225,13 @@ const Index = () => {
                     })}
                   </div>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-2">
+                <p className="text-[11px] text-muted-foreground mt-2 md:hidden">
+                  {t({
+                    en: "Cars stack vertically on smaller screens for easier scanning and editing.",
+                    sv: "Bilar visas vertikalt på mindre skärmar för enklare överblick och redigering.",
+                  })}
+                </p>
+                <p className="hidden md:block text-[11px] text-muted-foreground mt-2">
                   {t({
                     en: "Swipe horizontally to see more cars.",
                     sv: "Svep horisontellt för att se fler bilar.",
@@ -227,13 +262,18 @@ const Index = () => {
                 </div>
               )}
 
-              {(currency === "EUR" || currency === "VND") && (
+              {(currency === "EUR" || currency === "USD" || currency === "VND") && (
                 <p className="text-[10px] text-muted-foreground text-center mt-3">
                   {currency === "EUR"
                     ? t({
                       en: "EUR values use an approximate fixed rate (1 SEK ≈ 0.088 EUR). Actual rates may differ.",
                       sv: "EUR-värden använder en ungefärlig fast växelkurs (1 SEK ≈ 0,088 EUR). Faktisk kurs kan skilja sig.",
                     })
+                    : currency === "USD"
+                      ? t({
+                        en: "USD values use an approximate fixed rate (1 SEK ≈ 0.094 USD). Actual rates may differ.",
+                        sv: "USD-värden använder en ungefärlig fast växelkurs (1 SEK ≈ 0,094 USD). Faktisk kurs kan skilja sig.",
+                      })
                     : t({
                       en: "VND values use an approximate fixed rate (1 SEK ≈ 2,550 VND). Actual rates may differ.",
                       sv: "VND-värden använder en ungefärlig fast växelkurs (1 SEK ≈ 2 550 VND). Faktisk kurs kan skilja sig.",
@@ -243,11 +283,6 @@ const Index = () => {
             </section>
           </div>
 
-          {winner && (
-            <section className="min-w-0">
-              <CommercialTrialSection winner={winner} currency={currency} />
-            </section>
-          )}
         </div>
       </main>
 

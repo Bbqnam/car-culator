@@ -20,10 +20,10 @@ function isLanguage(value: string): value is Language {
 }
 
 function readInitialLanguage(): Language {
-  if (typeof window === "undefined") return "en";
+  if (typeof window === "undefined") return "sv";
   const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
   if (saved && isLanguage(saved)) return saved;
-  return window.navigator.language.toLowerCase().startsWith("sv") ? "sv" : "en";
+  return window.navigator.language.toLowerCase().startsWith("en") ? "en" : "sv";
 }
 
 export function localize(language: Language, text: LocalizedText): string {

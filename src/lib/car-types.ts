@@ -1,6 +1,6 @@
 export type FuelType = "petrol" | "diesel" | "hybrid" | "electric";
 export const FUEL_TYPE_ORDER: FuelType[] = ["petrol", "diesel", "hybrid", "electric"];
-export type Currency = "SEK" | "EUR" | "VND";
+export type Currency = "SEK" | "EUR" | "USD" | "VND";
 export type FinancingMode = "cash" | "loan" | "leasing";
 export type TaxCostSource = "estimated" | "manual";
 export type PriceSource = "market_listings" | "official_new" | "historical_average" | "manual" | "missing";
@@ -141,7 +141,7 @@ export function calculateResults(car: CarInput): CarResult {
     const costPerKm = totalKm > 0 ? totalOwnershipCost / totalKm : 0;
     return {
       id: car.id,
-      name: car.name || "Unnamed Car",
+      name: car.name || "Namnlös bil",
       brand: car.brand,
       fuelType: car.fuelType,
       financingMode: car.financingMode,
@@ -240,7 +240,7 @@ export function calculateResults(car: CarInput): CarResult {
 
   return {
     id: car.id,
-    name: car.name || "Unnamed Car",
+    name: car.name || "Namnlös bil",
     brand: car.brand,
     fuelType: car.fuelType,
     financingMode: "leasing",
@@ -313,16 +313,19 @@ export function createEmptyCar(id: string): CarInput {
 // ─── Currency ────────────────────────────────────────────────────────────────
 
 export const SEK_TO_EUR = 0.088;
+export const SEK_TO_USD = 0.094;
 export const SEK_TO_VND = 2550;
 
 export function convertSekToCurrency(value: number, currency: Currency): number {
   if (currency === "EUR") return value * SEK_TO_EUR;
+  if (currency === "USD") return value * SEK_TO_USD;
   if (currency === "VND") return value * SEK_TO_VND;
   return value;
 }
 
 export function getCurrencyCode(currency: Currency): string {
   if (currency === "EUR") return "EUR";
+  if (currency === "USD") return "USD";
   if (currency === "VND") return "VND";
   return "SEK";
 }
@@ -330,6 +333,9 @@ export function getCurrencyCode(currency: Currency): string {
 export function formatCurrency(value: number, currency: Currency): string {
   if (currency === "EUR") {
     return `€${Math.round(convertSekToCurrency(value, currency)).toLocaleString("sv-SE")}`;
+  }
+  if (currency === "USD") {
+    return `$${Math.round(convertSekToCurrency(value, currency)).toLocaleString("en-US")}`;
   }
   if (currency === "VND") {
     return `${Math.round(convertSekToCurrency(value, currency)).toLocaleString("vi-VN")} ₫`;
@@ -348,9 +354,9 @@ export function generateVerdict(result: CarResult, allResults: CarResult[]): str
   const isLowestMonthly = result.id === sortedMonthly[0].id;
   const isLowestTotal = result.id === sortedTotal[0].id;
 
-  if (isLowestMonthly && isLowestTotal) return "Lowest monthly and total cost";
-  if (isLowestMonthly) return "Lowest monthly cost";
-  if (isLowestTotal) return "Lowest total cost";
+  if (isLowestMonthly && isLowestTotal) return "Lägst månadskostnad och totalkostnad";
+  if (isLowestMonthly) return "Lägst månadskostnad";
+  if (isLowestTotal) return "Lägst totalkostnad";
 
   const b = result.breakdown;
   const total = result.totalOwnershipCost;
@@ -362,12 +368,12 @@ export function generateVerdict(result: CarResult, allResults: CarResult[]): str
     return sum + rb.fuel + rb.insurance + rb.tax + rb.service;
   }, 0) / allResults.length;
 
-  if (runningCosts < avgRunning * 0.8) return "Lower running costs";
-  if (b.depreciation / total > 0.45) return "High depreciation share";
-  if (b.financingCost / total > 0.15) return "High financing cost";
-  if (b.fuel / total > 0.3) return "High fuel cost share";
-  if (result.financingMode === "leasing" && result.ownershipMonths <= 36) return "Lease is cheaper short-term";
-  if (result.costPerKm < sortedMonthly[0].costPerKm * 1.05) return "Competitive cost per km";
+  if (runningCosts < avgRunning * 0.8) return "Låga löpande kostnader";
+  if (b.depreciation / total > 0.45) return "Hög andel värdeminskning";
+  if (b.financingCost / total > 0.15) return "Hög finansieringskostnad";
+  if (b.fuel / total > 0.3) return "Hög andel bränslekostnad";
+  if (result.financingMode === "leasing" && result.ownershipMonths <= 36) return "Leasing är billigare på kort sikt";
+  if (result.costPerKm < sortedMonthly[0].costPerKm * 1.05) return "Konkurrenskraftig kostnad per km";
 
-  return "Higher total cost";
+  return "Högre totalkostnad";
 }
