@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle, Send, Settings2, X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { type Language, useI18n } from "@/lib/i18n";
 
 type ApiRole = "user" | "assistant";
 type ChatMode = "proxy" | "browser" | "ollama";
@@ -42,8 +44,15 @@ const LEGACY_STORAGE_MODE_KEY = "carculator_grok_chat_mode";
 const LEGACY_STORAGE_BROWSER_API_KEY = "carculator_grok_browser_api_key";
 const LEGACY_STORAGE_BROWSER_MODEL = "carculator_grok_browser_model";
 
-const INITIAL_ASSISTANT_MESSAGE =
-  "Fråga mig vad du vill om din nuvarande biljämförelse. Jag kan förklara avvägningar, risker och när varje alternativ är bäst.";
+function getInitialAssistantMessage(language: Language): string {
+  return language === "sv"
+    ? "Fråga mig vad du vill om din nuvarande biljämförelse. Jag kan förklara avvägningar, risker och när varje alternativ är bäst."
+    : "Ask me anything about your current car comparison. I can explain tradeoffs, risks, and when each option makes the most sense.";
+}
+
+function getNoCarsConfiguredPrefix(language: Language): string {
+  return language === "sv" ? "Inga bilar är konfigurerade ännu." : "No cars are configured yet.";
+}
 
 function createMessageId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -59,19 +68,30 @@ function bubbleClasses(role: ApiRole): string {
   return "mr-auto bg-secondary text-foreground";
 }
 
-function buildSystemPrompt(comparisonContext: string): string {
+function buildSystemPrompt(comparisonContext: string, language: Language): string {
+  const isSwedish = language === "sv";
   const basePrompt = [
-    "Du är CarAI, en assistent som hjälper användare att jämföra kostnader för bilägande.",
-    "Var kortfattad, praktisk och tydlig med osäkerhet.",
-    "Använd jämförelsekontexten som enda källa för numeriska värden.",
-    "Om data saknas ska du ställa en kort följdfråga i stället för att hitta på siffror.",
+    isSwedish
+      ? "Du är CarAI, en assistent som hjälper användare att jämföra kostnader för bilägande."
+      : "You are CarAI, an assistant that helps users compare car ownership costs.",
+    isSwedish
+      ? "Var kortfattad, praktisk och tydlig med osäkerhet."
+      : "Be concise, practical, and transparent about uncertainty.",
+    isSwedish
+      ? "Använd jämförelsekontexten som enda källa för numeriska värden."
+      : "Use the comparison context as the only source of numeric values.",
+    isSwedish
+      ? "Om data saknas ska du ställa en kort följdfråga i stället för att hitta på siffror."
+      : "If data is missing, ask a short follow-up question instead of inventing numbers.",
   ].join(" ");
 
   if (!comparisonContext || !comparisonContext.trim()) {
-    return `${basePrompt} Inga bilar är konfigurerade ännu, så ge generell vägledning tills data finns.`;
+    return isSwedish
+      ? `${basePrompt} Inga bilar är konfigurerade ännu, så ge generell vägledning tills data finns.`
+      : `${basePrompt} No cars are configured yet, so provide general guidance until data is available.`;
   }
 
-  return `${basePrompt}\n\nAktuell jämförelsekontext:\n${comparisonContext.trim()}`;
+  return `${basePrompt}\n\n${isSwedish ? "Aktuell jämförelsekontext" : "Current comparison context"}:\n${comparisonContext.trim()}`;
 }
 
 function normalizeAssistantContent(content: unknown): string {
@@ -118,49 +138,49 @@ function readStoredMode(): ChatMode {
   return "ollama";
 }
 
-function getDefaultMessages(): ChatMessage[] {
+function getDefaultMessages(language: Language): ChatMessage[] {
   return [
     {
       id: createMessageId(),
       role: "assistant",
-      content: INITIAL_ASSISTANT_MESSAGE,
+      content: getInitialAssistantMessage(language),
       localOnly: true,
     },
   ];
 }
 
-function readStoredMessages(): ChatMessage[] {
+function readStoredMessages(language: Language): ChatMessage[] {
   const raw = readStoredValue(STORAGE_CHAT_MESSAGES);
-  if (!raw) return getDefaultMessages();
+  if (!raw) return getDefaultMessages(language);
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return getDefaultMessages();
+    if (!Array.isArray(parsed)) return getDefaultMessages(language);
 
-    const sanitized = parsed
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
+    const sanitized: ChatMessage[] = [];
 
-        const maybeRole = (item as { role?: unknown }).role;
-        const role: ApiRole = maybeRole === "assistant" ? "assistant" : "user";
-        const content = (item as { content?: unknown }).content;
-        const id = (item as { id?: unknown }).id;
-        const localOnly = (item as { localOnly?: unknown }).localOnly === true;
+    parsed.forEach((item) => {
+      if (!item || typeof item !== "object") return;
 
-        if (typeof content !== "string" || !content.trim()) return null;
+      const maybeRole = (item as { role?: unknown }).role;
+      const role: ApiRole = maybeRole === "assistant" ? "assistant" : "user";
+      const content = (item as { content?: unknown }).content;
+      const id = (item as { id?: unknown }).id;
+      const localOnly = (item as { localOnly?: unknown }).localOnly === true;
 
-        return {
-          id: typeof id === "string" && id.trim() ? id : createMessageId(),
-          role,
-          content,
-          localOnly,
-        } satisfies ChatMessage;
-      })
-      .filter((item): item is ChatMessage => item !== null);
+      if (typeof content !== "string" || !content.trim()) return;
 
-    return sanitized.length > 0 ? sanitized.slice(-MAX_STORED_MESSAGES) : getDefaultMessages();
+      sanitized.push({
+        id: typeof id === "string" && id.trim() ? id : createMessageId(),
+        role,
+        content,
+        localOnly,
+      });
+    });
+
+    return sanitized.length > 0 ? sanitized.slice(-MAX_STORED_MESSAGES) : getDefaultMessages(language);
   } catch {
-    return getDefaultMessages();
+    return getDefaultMessages(language);
   }
 }
 
@@ -168,6 +188,7 @@ async function sendViaOpenAiCompatibleApi(args: {
   url: string;
   model: string;
   comparisonContext: string;
+  language: Language;
   message: string;
   history: Array<{ role: ApiRole; content: string }>;
   apiKey?: string;
@@ -190,7 +211,7 @@ async function sendViaOpenAiCompatibleApi(args: {
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt(args.comparisonContext),
+          content: buildSystemPrompt(args.comparisonContext, args.language),
         },
         ...args.history,
         {
@@ -204,19 +225,29 @@ async function sendViaOpenAiCompatibleApi(args: {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const upstreamError = data?.error?.message || data?.message || "Kunde inte hämta svar från modell-API.";
+    const upstreamError =
+      data?.error?.message ||
+      data?.message ||
+      (args.language === "sv"
+        ? "Kunde inte hämta svar från modell-API."
+        : "Could not fetch a response from the model API.");
     throw new Error(upstreamError);
   }
 
   const reply = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
   if (!reply) {
-    throw new Error("Modellen returnerade ett tomt svar.");
+    throw new Error(
+      args.language === "sv"
+        ? "Modellen returnerade ett tomt svar."
+        : "The model returned an empty response.",
+    );
   }
 
   return reply;
 }
 
 export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
+  const { language, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>(readStoredMode);
@@ -238,14 +269,15 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
   const [input, setInput] = useState(() => readStoredValue(STORAGE_CHAT_DRAFT));
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => readStoredMessages());
+  const [messages, setMessages] = useState<ChatMessage[]>(() => readStoredMessages(language));
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
   const hasConfiguredCars = useMemo(
-    () => !comparisonContext.startsWith("Inga bilar är konfigurerade ännu."),
-    [comparisonContext],
+    () => !comparisonContext.startsWith(getNoCarsConfiguredPrefix(language)),
+    [comparisonContext, language],
   );
+
   const activeModelLabel = useMemo(() => {
     if (chatMode === "ollama") {
       return ollamaModel.trim() || DEFAULT_OLLAMA_MODEL;
@@ -253,8 +285,8 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
     if (chatMode === "browser") {
       return browserModel.trim() || DEFAULT_XAI_MODEL;
     }
-    return "serverkonfigurerad";
-  }, [chatMode, ollamaModel, browserModel]);
+    return t({ en: "server-configured", sv: "serverkonfigurerad" });
+  }, [browserModel, chatMode, ollamaModel, t]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -295,6 +327,20 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
   }, [messages]);
 
   useEffect(() => {
+    setMessages((previousMessages) => {
+      if (
+        previousMessages.length === 1 &&
+        previousMessages[0]?.localOnly &&
+        previousMessages[0].role === "assistant"
+      ) {
+        return [{ ...previousMessages[0], content: getInitialAssistantMessage(language) }];
+      }
+
+      return previousMessages;
+    });
+  }, [language]);
+
+  useEffect(() => {
     if (!open) return;
     const container = messagesRef.current;
     if (!container) return;
@@ -319,12 +365,23 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data?.error || "Kunde inte hämta svar från proxy-API.");
+      throw new Error(
+        data?.error ||
+          t({
+            en: "Could not fetch a response from the proxy API.",
+            sv: "Kunde inte hämta svar från proxy-API.",
+          }),
+      );
     }
 
     const reply = typeof data?.reply === "string" ? data.reply.trim() : "";
     if (!reply) {
-      throw new Error("Proxy returnerade ett tomt svar.");
+      throw new Error(
+        t({
+          en: "The proxy returned an empty response.",
+          sv: "Proxy returnerade ett tomt svar.",
+        }),
+      );
     }
 
     return reply;
@@ -336,13 +393,19 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
   ): Promise<string> => {
     const trimmedKey = browserApiKey.trim();
     if (!trimmedKey) {
-      throw new Error("Lägg till en API-nyckel i chattinställningarna för att använda testläget med webbläsarnyckel.");
+      throw new Error(
+        t({
+          en: "Add an API key in chat settings to use browser-key test mode.",
+          sv: "Lägg till en API-nyckel i chattinställningarna för att använda testläget med webbläsarnyckel.",
+        }),
+      );
     }
 
     return sendViaOpenAiCompatibleApi({
       url: BROWSER_XAI_API_URL,
       model: browserModel.trim() || DEFAULT_XAI_MODEL,
       comparisonContext,
+      language,
       message,
       history,
       apiKey: trimmedKey,
@@ -361,13 +424,17 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
         url,
         model,
         comparisonContext,
+        language,
         message,
         history,
       });
     } catch (requestError) {
       if (requestError instanceof TypeError) {
         throw new Error(
-          "Kunde inte nå Ollama. Kontrollera att Ollama körs och att URL är http://localhost:11434/v1/chat/completions",
+          t({
+            en: "Could not reach Ollama. Make sure Ollama is running and the URL is http://localhost:11434/v1/chat/completions",
+            sv: "Kunde inte nå Ollama. Kontrollera att Ollama körs och att URL är http://localhost:11434/v1/chat/completions",
+          }),
         );
       }
       throw requestError;
@@ -391,7 +458,7 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
       .filter((msg) => !msg.localOnly)
       .map((msg) => ({ role: msg.role, content: msg.content }));
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((previousMessages) => [...previousMessages, userMessage]);
     setIsSending(true);
 
     try {
@@ -405,8 +472,8 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
         reply = await sendViaOllama(message, history);
       }
 
-      setMessages((prev) => [
-        ...prev,
+      setMessages((previousMessages) => [
+        ...previousMessages,
         {
           id: createMessageId(),
           role: "assistant",
@@ -414,18 +481,21 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
         },
       ]);
     } catch (sendError) {
-      const message =
+      const nextError =
         sendError instanceof Error
           ? sendError.message
-          : "Något gick fel vid kontakt med modellen.";
-      setError(message);
+          : t({
+            en: "Something went wrong while contacting the model.",
+            sv: "Något gick fel vid kontakt med modellen.",
+          });
+      setError(nextError);
     } finally {
       setIsSending(false);
     }
   };
 
   const clearChat = () => {
-    setMessages(getDefaultMessages());
+    setMessages(getDefaultMessages(language));
     setInput("");
     setError(null);
   };
@@ -438,14 +508,22 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
             <div className="min-w-0">
               <h2 className="text-sm font-semibold truncate">CarAI</h2>
               <p className="text-[11px] text-muted-foreground">
-                {hasConfiguredCars ? "Använder din aktuella jämförelsedata" : "Generellt läge tills bilar är konfigurerade"}
+                {hasConfiguredCars
+                  ? t({
+                    en: "Using your current comparison data",
+                    sv: "Använder din aktuella jämförelsedata",
+                  })
+                  : t({
+                    en: "General mode until cars are configured",
+                    sv: "Generellt läge tills bilar är konfigurerade",
+                  })}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="p-1.5 rounded-md hover:bg-secondary transition-colors"
-              aria-label="Stäng AI-chatten"
+              aria-label={t({ en: "Close AI chat", sv: "Stäng AI-chatten" })}
             >
               <X className="w-4 h-4" />
             </button>
@@ -454,35 +532,39 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
           <div className="border-b border-border/50 px-3 py-2 bg-background/70">
             <button
               type="button"
-              onClick={() => setSettingsOpen((prev) => !prev)}
+              onClick={() => setSettingsOpen((previousState) => !previousState)}
               className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <span className="inline-flex items-center gap-1.5">
                 <Settings2 className="w-3.5 h-3.5" />
-                Chattinställningar
+                {t({ en: "Chat settings", sv: "Chattinställningar" })}
               </span>
-              <span>{settingsOpen ? "Dölj" : "Visa"}</span>
+              <span>{settingsOpen ? t({ en: "Hide", sv: "Dölj" }) : t({ en: "Show", sv: "Visa" })}</span>
             </button>
 
             {settingsOpen && (
               <div className="mt-2 space-y-2.5">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-muted-foreground">Anslutningsläge</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    {t({ en: "Connection mode", sv: "Anslutningsläge" })}
+                  </p>
                   <select
                     value={chatMode}
                     onChange={(event) => setChatMode(event.target.value as ChatMode)}
                     className="w-full h-9 rounded-md border border-input bg-background px-2.5 text-xs"
                   >
-                    <option value="ollama">Ollama lokalt (ingen nyckel)</option>
-                    <option value="proxy">Säker proxy (rekommenderas i produktion)</option>
-                    <option value="browser">Testläge med webbläsarnyckel (xAI)</option>
+                    <option value="ollama">{t({ en: "Local Ollama (no key)", sv: "Ollama lokalt (ingen nyckel)" })}</option>
+                    <option value="proxy">{t({ en: "Secure proxy (recommended in production)", sv: "Säker proxy (rekommenderas i produktion)" })}</option>
+                    <option value="browser">{t({ en: "Browser-key test mode (xAI)", sv: "Testläge med webbläsarnyckel (xAI)" })}</option>
                   </select>
                 </div>
 
                 {chatMode === "ollama" && (
                   <>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-muted-foreground">Ollama-URL</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {t({ en: "Ollama URL", sv: "Ollama-URL" })}
+                      </p>
                       <Input
                         type="text"
                         value={ollamaApiUrl}
@@ -492,7 +574,9 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-muted-foreground">Ollama-modell</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {t({ en: "Ollama model", sv: "Ollama-modell" })}
+                      </p>
                       <Input
                         type="text"
                         value={ollamaModel}
@@ -502,7 +586,10 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground">
-                      Exempelmodell: llama3.2:1b. Kontrollera att Ollama körs lokalt.
+                      {t({
+                        en: "Example model: llama3.2:1b. Make sure Ollama is running locally.",
+                        sv: "Exempelmodell: llama3.2:1b. Kontrollera att Ollama körs lokalt.",
+                      })}
                     </p>
                   </>
                 )}
@@ -510,7 +597,9 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                 {chatMode === "browser" && (
                   <>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-muted-foreground">xAI API-nyckel (endast test)</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {t({ en: "xAI API key (test only)", sv: "xAI API-nyckel (endast test)" })}
+                      </p>
                       <Input
                         type="password"
                         value={browserApiKey}
@@ -520,7 +609,9 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-muted-foreground">xAI-modell</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {t({ en: "xAI model", sv: "xAI-modell" })}
+                      </p>
                       <Input
                         type="text"
                         value={browserModel}
@@ -530,8 +621,10 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                       />
                     </div>
                     <p className="text-[10px] text-amber-600">
-                      Läget med webbläsarnyckel sparar nyckeln i lokal lagring och exponerar den för webbläsarverktyg.
-                      Använd endast för tillfällig testning.
+                      {t({
+                        en: "Browser-key mode stores the key in local storage and exposes it to browser tooling. Use it only for temporary testing.",
+                        sv: "Läget med webbläsarnyckel sparar nyckeln i lokal lagring och exponerar den för webbläsarverktyg. Använd endast för tillfällig testning.",
+                      })}
                     </p>
                   </>
                 )}
@@ -550,7 +643,7 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
             ))}
             {isSending && (
               <div className="mr-auto bg-secondary text-foreground rounded-2xl px-3 py-2 text-sm">
-                Tänker...
+                {t({ en: "Thinking...", sv: "Tänker..." })}
               </div>
             )}
           </div>
@@ -560,7 +653,10 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
             <Textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Fråga om månadskostnader, finansieringsavvägningar eller dolda risker..."
+              placeholder={t({
+                en: "Ask about monthly costs, financing tradeoffs, or hidden risks...",
+                sv: "Fråga om månadskostnader, finansieringsavvägningar eller dolda risker...",
+              })}
               className="min-h-[96px] sm:min-h-[78px] resize-none"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -571,7 +667,11 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
             />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[10px] text-muted-foreground">
-                Läge: {chatMode === "ollama" ? "Ollama lokalt" : chatMode === "browser" ? "Webbläsarnyckel" : "Säker proxy"} | Modell: {activeModelLabel}
+                {t({ en: "Mode", sv: "Läge" })}: {chatMode === "ollama"
+                  ? t({ en: "Local Ollama", sv: "Ollama lokalt" })
+                  : chatMode === "browser"
+                    ? t({ en: "Browser key", sv: "Webbläsarnyckel" })
+                    : t({ en: "Secure proxy", sv: "Säker proxy" })} | {t({ en: "Model", sv: "Modell" })}: {activeModelLabel}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -582,7 +682,7 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                   disabled={isSending}
                   className="min-h-11 flex-1 text-xs sm:min-h-0 sm:flex-none"
                 >
-                  Rensa chatt
+                  {t({ en: "Clear chat", sv: "Rensa chatt" })}
                 </Button>
                 <Button
                   type="button"
@@ -591,7 +691,7 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
                   className="min-h-11 flex-1 gap-2 sm:min-h-0 sm:flex-none"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  Skicka
+                  {t({ en: "Send", sv: "Skicka" })}
                 </Button>
               </div>
             </div>
@@ -601,12 +701,16 @@ export function CarAIChatWidget({ comparisonContext }: CarAIChatWidgetProps) {
 
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => setOpen((previousState) => !previousState)}
         className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 sm:right-6 z-40 rounded-full px-4 py-3 bg-foreground text-background shadow-xl hover:opacity-90 transition-opacity flex items-center gap-2"
-        aria-label={open ? "Stäng AI-chatten" : "Öppna AI-chatten"}
+        aria-label={open
+          ? t({ en: "Close AI chat", sv: "Stäng AI-chatten" })
+          : t({ en: "Open AI chat", sv: "Öppna AI-chatten" })}
       >
         {open ? <X className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
-        <span className="text-xs font-semibold tracking-wide uppercase">AI-chatt</span>
+        <span className="text-xs font-semibold tracking-wide uppercase">
+          {t({ en: "AI chat", sv: "AI-chatt" })}
+        </span>
       </button>
     </>
   );

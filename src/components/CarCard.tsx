@@ -537,7 +537,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     ? t({ en: "Your expected electricity price per kWh.", sv: "Ditt förväntade elpris per kWh." })
     : t({ en: "Your expected fuel price per liter.", sv: "Ditt förväntade bränslepris per liter." });
   const exactEuEvModel = euEvModels.find((item) => item.model === car.model);
-  const availableFuelTypes = useMemo(
+  const availableFuelTypes = useMemo<FuelType[]>(
     () => {
       if (!car.brand || !car.model) return FUEL_TYPE_ORDER;
       if (exactEuEvModel) return ["electric"];
@@ -1078,7 +1078,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     <div className="space-y-1">
                       <Select
                         value={car.fuelType}
-                        onValueChange={(v: FuelType) => handleFuelTypeChange(v)}
+                        onValueChange={(value) => handleFuelTypeChange(value as FuelType)}
                       >
                         <SelectTrigger className="min-h-11 h-auto py-2.5 text-sm bg-card border border-border/70 sm:min-h-[2.5rem]">
                           <SelectValue />

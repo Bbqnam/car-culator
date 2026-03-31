@@ -27,7 +27,7 @@ A comprehensive car ownership decision tool that helps you compare multiple vehi
 - **Styling**: Tailwind CSS with ShadCN UI components
 - **State Management**: React Query for data fetching and caching
 - **Routing**: React Router
-- **Testing**: Vitest for unit tests, Playwright for end-to-end testing
+- **Testing**: Vitest for unit tests, with end-to-end coverage planned next
 - **Linting**: ESLint
 - **Package Manager**: Bun (recommended) or npm
 
@@ -120,7 +120,9 @@ If you have Ollama installed, you can use the chat with no cloud API key:
 3. **Select Financing**: Choose between cash, loan, or leasing for each car
 4. **Review Results**: View detailed cost breakdowns and compare options
 5. **Switch Language/Currency**: Use the dropdowns in the header to toggle language and currency (SEK, EUR, VND)
-6. **Ask AI questions**: Open the floating **AI Chat** button to ask CarAI about the exact cars in your comparison
+6. **Toggle theme**: Switch between light and dark mode with the header button
+7. **Try the login prototype**: Open the optional login prototype from the header without blocking the calculator
+8. **Ask AI questions**: Open the floating **AI Chat** button to ask CarAI about the exact cars in your comparison
 
 ## Environment Variables
 
@@ -154,6 +156,7 @@ If you have Ollama installed, you can use the chat with no cloud API key:
 - `preview` - Preview the production build locally
 - `test` - Run unit tests with Vitest
 - `test:watch` - Run tests in watch mode
+- `typecheck` - Run strict TypeScript checks
 
 ## Project Structure
 
@@ -165,12 +168,15 @@ src/
 │   ├── ResultsPanel.tsx # Cost comparison results
 │   └── ...
 ├── hooks/              # Custom React hooks
+│   ├── use-car-comparison.ts # Main calculator workflow state
+│   └── ...
 ├── lib/                # Utility functions and data
 │   ├── car-types.ts    # TypeScript types and calculations
 │   ├── car-database.ts # Car data and brand logos
 │   └── utils.ts        # Helper functions
 ├── pages/              # Route components
 │   ├── Index.tsx       # Main application page
+│   ├── Login.tsx       # Optional auth prototype
 │   └── NotFound.tsx    # 404 error page
 └── assets/             # Static assets
 ```

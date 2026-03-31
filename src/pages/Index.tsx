@@ -1,9 +1,7 @@
-import { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CarInput, Currency, calculateResults, createEmptyCar } from "@/lib/car-types";
-import { isCarReadyToSave } from "@/lib/car-validation";
+import { type Currency } from "@/lib/car-types";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { Plus } from "lucide-react";
 import { CarChip } from "@/components/CarChip";
@@ -11,110 +9,32 @@ import { AddCarModal } from "@/components/AddCarModal";
 import { CarAIChatWidget } from "@/components/CarAIChatWidget";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { useCarComparison } from "@/hooks/use-car-comparison";
 import { useAuth } from "@/lib/auth";
-import { buildComparisonContext } from "@/lib/ai-chat-context";
 import { useI18n } from "@/lib/i18n";
 
 const Index = () => {
   const { language, setLanguage, t } = useI18n();
   const { user } = useAuth();
-  const nextId = useRef(2);
-  const [cars, setCars] = useState<CarInput[]>([createEmptyCar("1")]);
-  const [currency, setCurrency] = useState<Currency>("SEK");
-  const [activeCarId, setActiveCarId] = useState<string | null>(null);
-  const [pendingNewCarId, setPendingNewCarId] = useState<string | null>(null);
-
-  const configuredCars = cars.filter((c) => c.isConfigured);
-
-  const results = useMemo(
-    () => configuredCars.map((c) => calculateResults(c)),
-    [configuredCars]
-  );
-  const comparisonContext = useMemo(
-    () => buildComparisonContext(configuredCars, results, currency, language),
-    [configuredCars, results, currency, language]
-  );
-
-  const winnerId = useMemo(() => {
-    if (results.length === 0) return null;
-    return [...results].sort((a, b) => a.monthlyCost - b.monthlyCost)[0]?.id ?? null;
-  }, [results]);
-
-  const activeCar = cars.find((c) => c.id === activeCarId) ?? null;
-  const activeCarIndex = activeCar ? cars.findIndex((c) => c.id === activeCar.id) : 0;
-
-  const hasMeaningfulInput = (car: CarInput) =>
-    car.brand.trim().length > 0 ||
-    car.model.trim().length > 0 ||
-    car.name.trim().length > 0 ||
-    car.purchasePrice > 0 ||
-    car.fuelConsumption > 0 ||
-    car.taxCost > 0 ||
-    car.serviceCost > 0;
-
-  const updateCar = (id: string, updated: CarInput) => {
-    setCars((prev) => prev.map((c) => (c.id === id ? updated : c)));
-  };
-
-  const removeCar = (id: string) => {
-    setPendingNewCarId((prev) => (prev === id ? null : prev));
-    setCars((prev) => {
-      const filtered = prev.filter((c) => c.id !== id);
-      if (filtered.length === 0) {
-        const fallback = createEmptyCar(String(nextId.current++));
-        setActiveCarId(null);
-        return [fallback];
-      }
-      if (activeCarId === id) setActiveCarId(null);
-      return filtered;
-    });
-  };
-
-  const addCar = () => {
-    if (cars.length >= 6) return;
-    const newCar = createEmptyCar(String(nextId.current++));
-    setCars((prev) => [...prev, newCar]);
-    setPendingNewCarId(newCar.id);
-    setActiveCarId(newCar.id);
-  };
-
-  const duplicateCar = (id: string) => {
-    if (cars.length >= 6) return;
-    setCars((prev) => {
-      const source = prev.find((c) => c.id === id);
-      if (!source) return prev;
-      const newId = String(nextId.current++);
-      const duplicated = { ...source, id: newId };
-      setPendingNewCarId(null);
-      setActiveCarId(newId);
-      return [...prev, duplicated];
-    });
-  };
-
-  const closeActiveCarModal = () => {
-    if (!activeCar) {
-      setActiveCarId(null);
-      return;
-    }
-
-    const closingCarId = activeCar.id;
-    const isPendingCarValid = isCarReadyToSave(activeCar, t);
-    const shouldDiscardPendingCar =
-      pendingNewCarId === closingCarId &&
-      !activeCar.isConfigured &&
-      (!hasMeaningfulInput(activeCar) || !isPendingCarValid);
-
-    if (shouldDiscardPendingCar) {
-      setCars((prev) => {
-        const filtered = prev.filter((c) => c.id !== closingCarId);
-        if (filtered.length > 0) return filtered;
-        return [createEmptyCar(String(nextId.current++))];
-      });
-    }
-
-    setPendingNewCarId((prev) => (prev === closingCarId ? null : prev));
-    setActiveCarId(null);
-  };
+  const {
+    cars,
+    currency,
+    setCurrency,
+    configuredCars,
+    results,
+    comparisonContext,
+    winnerId,
+    activeCar,
+    activeCarIndex,
+    canAddCars,
+    canRemoveCars,
+    addCar,
+    openCar,
+    updateCar,
+    removeCar,
+    duplicateCar,
+    closeActiveCarModal,
+  } = useCarComparison({ language, t });
 
   return (
     <div className="min-h-screen bg-background">
@@ -186,7 +106,7 @@ const Index = () => {
                 <h1 className="text-base font-semibold tracking-tight text-foreground">
                   {t({ en: "Your cars", sv: "Dina bilar" })}
                 </h1>
-                {cars.length < 6 && (
+                {canAddCars && (
                   <button
                     onClick={addCar}
                     className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -209,15 +129,15 @@ const Index = () => {
                         currency={currency}
                         result={result}
                         isWinner={winnerId === car.id}
-                        canRemove={cars.length > 1}
-                        canDuplicate={cars.length < 6}
-                        onOpen={() => setActiveCarId(car.id)}
+                        canRemove={canRemoveCars}
+                        canDuplicate={canAddCars}
+                        onOpen={() => openCar(car.id)}
                         onRemove={() => removeCar(car.id)}
                         onDuplicate={() => duplicateCar(car.id)}
                       />
                     );
                   })}
-                  {cars.length < 6 && (
+                  {canAddCars && (
                     <button
                       type="button"
                       onClick={addCar}
@@ -244,9 +164,9 @@ const Index = () => {
                           currency={currency}
                           result={result}
                           isWinner={winnerId === car.id}
-                          canRemove={cars.length > 1}
-                          canDuplicate={cars.length < 6}
-                          onOpen={() => setActiveCarId(car.id)}
+                          canRemove={canRemoveCars}
+                          canDuplicate={canAddCars}
+                          onOpen={() => openCar(car.id)}
                           onRemove={() => removeCar(car.id)}
                           onDuplicate={() => duplicateCar(car.id)}
                         />
@@ -326,8 +246,8 @@ const Index = () => {
         onChange={(updated) => updateCar(updated.id, updated)}
         onRemove={() => activeCar && removeCar(activeCar.id)}
         onDuplicate={() => activeCar && duplicateCar(activeCar.id)}
-        canRemove={cars.length > 1}
-        canDuplicate={cars.length < 6}
+        canRemove={canRemoveCars}
+        canDuplicate={canAddCars}
       />
 
       <CarAIChatWidget comparisonContext={comparisonContext} />

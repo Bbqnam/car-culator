@@ -1002,7 +1002,7 @@ function DiagramTab({
             data={chartData}
             layout="vertical"
             margin={{ top: 2, right: 12, left: 4, bottom: 2 }}
-            barKategoriGap={12}
+            barCategoryGap={12}
           >
             <XAxis type="number" hide />
             <YAxis
