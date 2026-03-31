@@ -289,7 +289,7 @@ function OverviewResultCard({
         </div>
 
         <div className="text-left sm:text-right shrink-0 sm:pt-0.5">
-          <div className="text-[1.7rem] sm:text-[2.05rem] font-bold tracking-tight tabular-nums leading-none">
+          <div className="text-[1.5rem] sm:text-[1.8rem] font-bold tracking-tight tabular-nums leading-none">
             {formatCurrency(result.monthlyCost, currency)}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">{language === "sv" ? "/mån" : "/mo"}</div>
@@ -363,7 +363,7 @@ function MiniStat({
     <div className="min-w-0">
       <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
       <div
-        className={`text-[15px] font-semibold tabular-nums leading-tight ${
+        className={`text-[14px] font-semibold tabular-nums leading-tight ${
           accent === "negative"
             ? "text-destructive"
             : accent === "positive"
