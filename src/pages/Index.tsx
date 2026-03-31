@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarInput, Currency, calculateResults, createEmptyCar } from "@/lib/car-types";
 import { isCarReadyToSave } from "@/lib/car-validation";
 import { ResultsPanel } from "@/components/ResultsPanel";
@@ -6,11 +9,15 @@ import { Plus } from "lucide-react";
 import { CarChip } from "@/components/CarChip";
 import { AddCarModal } from "@/components/AddCarModal";
 import { CarAIChatWidget } from "@/components/CarAIChatWidget";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
+import { useAuth } from "@/lib/auth";
 import { buildComparisonContext } from "@/lib/ai-chat-context";
 import { useI18n } from "@/lib/i18n";
 
 const Index = () => {
   const { language, setLanguage, t } = useI18n();
+  const { user } = useAuth();
   const nextId = useRef(2);
   const [cars, setCars] = useState<CarInput[]>([createEmptyCar("1")]);
   const [currency, setCurrency] = useState<Currency>("SEK");
@@ -126,27 +133,47 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as typeof language)}
-              className="min-h-9 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
-              aria-label={t({ en: "Language", sv: "Språk" })}
-            >
-              <option value="en">English</option>
-              <option value="sv">Svenska</option>
-            </select>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as Currency)}
-              className="min-h-9 text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
-              aria-label={t({ en: "Currency", sv: "Valuta" })}
-            >
-              <option value="SEK">kr SEK</option>
-              <option value="EUR">€ EUR</option>
-              <option value="USD">$ USD</option>
-              <option value="VND">₫ VND</option>
-            </select>
+          <div className="flex flex-wrap items-center justify-end gap-2 self-end sm:self-auto">
+            <Select value={language} onValueChange={(value) => setLanguage(value as typeof language)}>
+              <SelectTrigger
+                className="h-9 w-[110px] rounded-full border-border/70 bg-background/80 text-xs font-medium backdrop-blur-sm"
+                aria-label={t({ en: "Language", sv: "Språk" })}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="sv">Svenska</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={currency} onValueChange={(value) => setCurrency(value as Currency)}>
+              <SelectTrigger
+                className="h-9 w-[118px] rounded-full border-border/70 bg-background/80 text-xs font-medium backdrop-blur-sm"
+                aria-label={t({ en: "Currency", sv: "Valuta" })}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="SEK">kr SEK</SelectItem>
+                <SelectItem value="EUR">EUR</SelectItem>
+                <SelectItem value="USD">USD</SelectItem>
+                <SelectItem value="VND">VND</SelectItem>
+              </SelectContent>
+            </Select>
+            <ThemeToggle />
+            {user ? (
+              <UserMenu />
+            ) : (
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 rounded-full border-border/70 bg-background/80 px-3 text-xs font-medium backdrop-blur-sm"
+              >
+                <Link to="/login">
+                  {t({ en: "Try login prototype", sv: "Testa login-prototyp" })}
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>
