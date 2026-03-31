@@ -8,6 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
+    --page-scale: 0.9;
     --background: 0 0% 98%;
     --foreground: 220 15% 15%;
 
@@ -67,9 +68,25 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    zoom: var(--page-scale);
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  }
+}
 
+@supports not (zoom: 1) {
+  html {
+    zoom: 1;
+  }
+
+  body {
+    transform: scale(var(--page-scale));
+    transform-origin: top left;
+    width: calc(100% / var(--page-scale));
+    min-height: calc(100vh / var(--page-scale));
   }
 }
