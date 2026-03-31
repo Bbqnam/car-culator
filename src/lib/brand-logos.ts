@@ -26,6 +26,7 @@ import bugattiLogo from "@/assets/logos/bugatti.png";
 import buickLogo from "@/assets/logos/buick.png";
 import dodgeLogo from "@/assets/logos/dodge.png";
 import dongfengLogo from "@/assets/logos/dongfeng.png";
+import elarisLogo from "@/assets/logos/elaris.svg";
 import fireflyLogo from "@/assets/logos/firefly.svg";
 import genesisLogo from "@/assets/logos/genesis.png";
 import gmcLogo from "@/assets/logos/gmc.png";
@@ -112,6 +113,7 @@ const BRAND_LOGOS: Record<string, string> = {
   Buick: buickLogo,
   Dodge: dodgeLogo,
   Dongfeng: dongfengLogo,
+  Elaris: elarisLogo,
   firefly: fireflyLogo,
   Genesis: genesisLogo,
   GMC: gmcLogo,
@@ -156,6 +158,7 @@ const BRAND_ACCENTS: Record<string, string> = {
   SEAT: "#c41230",
   MG: "#b1131a",
   BYD: "#cc1f2f",
+  Elaris: "#ffb300",
 };
 
 const BRAND_SIMPLE_ICONS: Record<string, SimpleIcon> = {
@@ -203,6 +206,7 @@ const BRAND_ALIASES: Record<string, string> = {
   cupra: "Cupra",
   ds: "DS",
   dsautomobiles: "DS",
+  elaris: "Elaris",
   firefly: "firefly",
   gmw: "GWM",
   gwm: "GWM",
@@ -226,7 +230,11 @@ const BRAND_ALIASES: Record<string, string> = {
 const SIMPLE_ICON_LOGO_CACHE = new Map<string, string>();
 
 function normalizeBrandKey(brand: string): string {
-  return brand.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return brand
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function toTitleCaseWord(word: string): string {

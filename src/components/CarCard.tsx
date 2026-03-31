@@ -34,7 +34,10 @@ import {
   fetchEuEvVariants,
 } from "@/lib/eu-ev-api";
 import { convertEurToSek } from "@/lib/currency-api";
-import { fetchMarketPriceEstimate } from "@/lib/market-price-api";
+import {
+  fetchMarketPriceEstimate,
+  shouldPreferMarketPriceEstimate,
+} from "@/lib/market-price-api";
 import { estimateSwedishVehicleTax } from "@/lib/swedish-tax";
 import { Label } from "@/components/ui/label";
 import {
@@ -71,7 +74,11 @@ const EMPTY_EU_EV_VARIANTS: EuEvVariant[] = [];
 const EMPTY_EU_EV_MODELS: EuEvModelCatalogEntry[] = [];
 
 function normalizeLookupText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function applyEstimatedTax(car: CarInput, co2Override?: number | null): CarInput {
@@ -745,16 +752,14 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
   useEffect(() => {
     if (!car.isConfigured || !marketPriceQuery.data?.priceSek) return;
-    if (car.priceSource === "manual" || car.priceSource === "official_new") return;
-    if (car.priceSource !== "missing" && car.priceSource !== "market_listings" && car.purchasePrice > 0) return;
-
     const marketEstimate = marketPriceQuery.data;
-    const isFutureModelYear = car.modelYear > new Date().getFullYear();
-    const isWeakMarketMatch =
-      marketEstimate.matchType === "model_family" || marketEstimate.sampleSize < 2;
-
-    // Avoid replacing configured/base prices with weak or non-comparable listing matches.
-    if (isFutureModelYear || (localModelMatch && isWeakMarketMatch)) {
+    if (!shouldPreferMarketPriceEstimate({
+      currentPriceSource: car.priceSource,
+      currentPurchasePrice: car.purchasePrice,
+      hasLocalModelMatch: Boolean(localModelMatch),
+      modelYear: car.modelYear,
+      estimate: marketEstimate,
+    })) {
       return;
     }
 

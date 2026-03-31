@@ -93,7 +93,7 @@ export function CarChip({
       <button
         type="button"
         onClick={onOpen}
-        className="w-full min-h-[188px] rounded-xl border border-dashed border-border bg-card/60 hover:bg-card p-4 text-left"
+        className="w-full min-h-[176px] rounded-xl border border-dashed border-border bg-card/60 hover:bg-card p-3.5 text-left"
       >
         <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center mb-2.5">
           <Plus className="w-4 h-4 text-muted-foreground" />
@@ -124,8 +124,8 @@ export function CarChip({
   const { brandPart, modelPart } = splitDisplayName(displayName, car.brand);
 
   return (
-    <div className="w-full min-h-[188px] rounded-xl border border-border/70 bg-card relative group overflow-hidden">
-      <div className="p-4">
+    <div className="w-full min-h-[176px] rounded-xl border border-border/70 bg-card relative group overflow-hidden">
+      <div className="p-3.5">
         <div className="relative">
           <button
             type="button"
@@ -144,7 +144,7 @@ export function CarChip({
                 {FINANCING_LABELS[car.financingMode]}
               </span>
             </div>
-            <div className="min-h-[3.25rem] pr-1">
+            <div className="min-h-[2.9rem] pr-1">
               {brandPart ? (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
@@ -188,7 +188,7 @@ export function CarChip({
             </div>
           </button>
 
-          <div className="mt-3 flex items-center justify-end gap-2 sm:absolute sm:top-0 sm:right-0 sm:z-[2] sm:mt-0 sm:gap-1 sm:rounded-full sm:bg-card/95 sm:px-1 sm:py-1 sm:shadow-sm sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
+          <div className="mt-2.5 flex items-center justify-end gap-2 sm:absolute sm:top-0 sm:right-0 sm:z-[2] sm:mt-0 sm:gap-1 sm:rounded-full sm:bg-card/95 sm:px-1 sm:py-1 sm:shadow-sm sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
             <button
               type="button"
               onClick={onOpen}
@@ -224,7 +224,7 @@ export function CarChip({
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className={`w-full mt-3 text-left rounded-lg border px-3 py-3 transition-colors ${
+            className={`w-full mt-2.5 text-left rounded-lg border px-3 py-2.5 transition-colors ${
               isWinner
                 ? "border-highlight/35 bg-highlight/10 hover:bg-highlight/15"
                 : "border-border/60 bg-secondary/25 hover:bg-secondary/40"
@@ -237,7 +237,7 @@ export function CarChip({
           >
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <p
-                className={`text-[1.18rem] sm:text-[1.28rem] font-bold leading-tight tabular-nums ${
+                className={`text-[1.12rem] sm:text-[1.22rem] font-bold leading-tight tabular-nums ${
                   isWinner ? "text-highlight" : "text-foreground"
                 }`}
               >
@@ -248,12 +248,12 @@ export function CarChip({
               </p>
             </div>
 
-            <div className="mt-2 flex items-end justify-between gap-2">
+            <div className="mt-1.5 flex items-end justify-between gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                 {t({ en: "Total cost", sv: "Total kostnad" })}
               </p>
               <p
-                className={`text-[0.98rem] sm:text-[1.02rem] font-semibold leading-none tabular-nums whitespace-nowrap ${
+                className={`text-[0.95rem] sm:text-[1rem] font-semibold leading-none tabular-nums whitespace-nowrap ${
                   isWinner ? "text-highlight" : "text-foreground"
                 }`}
               >
@@ -261,7 +261,7 @@ export function CarChip({
               </p>
             </div>
 
-            <div className="mt-2.5 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
               <span>{expanded ? t({ en: "Hide details", sv: "Dölj detaljer" }) : t({ en: "Show details", sv: "Visa detaljer" })}</span>
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </div>

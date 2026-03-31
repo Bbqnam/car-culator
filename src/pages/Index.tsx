@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { CarInput, Currency, calculateResults, createEmptyCar } from "@/lib/car-types";
+import { isCarReadyToSave } from "@/lib/car-validation";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { Plus } from "lucide-react";
 import { CarChip } from "@/components/CarChip";
@@ -90,10 +91,11 @@ const Index = () => {
     }
 
     const closingCarId = activeCar.id;
+    const isPendingCarValid = isCarReadyToSave(activeCar, t);
     const shouldDiscardPendingCar =
       pendingNewCarId === closingCarId &&
       !activeCar.isConfigured &&
-      !hasMeaningfulInput(activeCar);
+      (!hasMeaningfulInput(activeCar) || !isPendingCarValid);
 
     if (shouldDiscardPendingCar) {
       setCars((prev) => {
@@ -243,7 +245,7 @@ const Index = () => {
             <section className="lg:sticky lg:top-20 lg:self-start min-w-0 w-full lg:pt-[2.25rem]">
               {results.length > 0 ? (
                 <div className="min-h-[240px] lg:min-h-[290px]">
-                  <ResultsPanel results={results} currency={currency} />
+                  <ResultsPanel cars={configuredCars} results={results} currency={currency} />
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border/60 bg-card p-8 text-center min-h-[240px] lg:min-h-[290px] flex flex-col items-center justify-center">

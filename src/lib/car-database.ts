@@ -51,17 +51,28 @@ const BRAND_PRICE_ANCHORS: Partial<Record<string, Partial<Record<FuelType, numbe
   Cadillac: { petrol: 780000, diesel: 820000, hybrid: 860000, electric: 980000 },
   Chevrolet: { petrol: 520000, diesel: 540000, hybrid: 620000, electric: 580000 },
   Corvette: { petrol: 1400000, hybrid: 1700000 },
+  Citroen: { petrol: 270000, hybrid: 320000, electric: 350000 },
+  Dacia: { petrol: 240000, hybrid: 300000, electric: 230000 },
+  DS: { petrol: 420000, hybrid: 520000, electric: 470000 },
   Ferrari: { petrol: 3800000, hybrid: 4500000, electric: 4200000 },
+  Fiat: { petrol: 230000, hybrid: 260000, electric: 340000 },
   GMC: { petrol: 700000, diesel: 760000, electric: 900000 },
+  Honda: { petrol: 360000, hybrid: 420000, electric: 470000 },
   Jaguar: { petrol: 920000, diesel: 980000, hybrid: 1100000, electric: 980000 },
+  Jeep: { petrol: 540000, hybrid: 680000, electric: 690000 },
   Lamborghini: { petrol: 4500000, hybrid: 5200000, electric: 4800000 },
   Lexus: { petrol: 760000, hybrid: 820000, electric: 840000 },
   Lincoln: { petrol: 850000, hybrid: 920000, electric: 980000 },
   Lotus: { petrol: 1300000, hybrid: 1450000, electric: 1150000 },
   Maserati: { petrol: 1500000, hybrid: 1650000, electric: 1850000 },
   McLaren: { petrol: 3300000, hybrid: 4200000, electric: 3800000 },
+  Mini: { petrol: 380000, electric: 470000 },
+  Mitsubishi: { petrol: 280000, hybrid: 430000 },
+  Opel: { petrol: 290000, hybrid: 350000, electric: 390000 },
   Porsche: { petrol: 1250000, diesel: 1180000, hybrid: 1350000, electric: 1100000 },
   "Rolls-Royce": { petrol: 4200000, hybrid: 4500000, electric: 5200000 },
+  Subaru: { petrol: 430000, hybrid: 470000, electric: 520000 },
+  Suzuki: { petrol: 240000, hybrid: 290000, electric: 360000 },
 };
 
 export const carDatabase: CarBrand[] = [
@@ -221,6 +232,127 @@ export const carDatabase: CarBrand[] = [
     ],
   },
   {
+    brand: "Citroen",
+    models: [
+      { model: "C3 PureTech 100", purchasePrice: 219000, fuelType: "petrol", fuelConsumption: 5.4, taxCost: 1000, serviceCost: 3200 },
+      { model: "e-C3", purchasePrice: 299000, fuelType: "electric", fuelConsumption: 16.8, taxCost: 360, serviceCost: 2400 },
+      { model: "C4 Hybrid 136", purchasePrice: 329000, fuelType: "hybrid", fuelConsumption: 4.7, taxCost: 1100, serviceCost: 3400 },
+      { model: "e-C4", purchasePrice: 389000, fuelType: "electric", fuelConsumption: 15.7, taxCost: 360, serviceCost: 2500 },
+      { model: "C5 Aircross Hybrid 225", purchasePrice: 479000, fuelType: "hybrid", fuelConsumption: 1.7, taxCost: 600, serviceCost: 4200 },
+    ],
+  },
+  {
+    brand: "Dacia",
+    models: [
+      { model: "Sandero TCe 90", purchasePrice: 194000, fuelType: "petrol", fuelConsumption: 5.4, taxCost: 900, serviceCost: 2800 },
+      { model: "Jogger Hybrid 140", purchasePrice: 289000, fuelType: "hybrid", fuelConsumption: 4.9, taxCost: 1000, serviceCost: 3200 },
+      { model: "Duster TCe 130", purchasePrice: 269000, fuelType: "petrol", fuelConsumption: 6.2, taxCost: 1300, serviceCost: 3300 },
+      { model: "Duster Hybrid 140", purchasePrice: 329000, fuelType: "hybrid", fuelConsumption: 5.0, taxCost: 1100, serviceCost: 3400 },
+      { model: "Bigster Hybrid 155", purchasePrice: 369000, fuelType: "hybrid", fuelConsumption: 5.4, taxCost: 1200, serviceCost: 3600 },
+      { model: "Spring Electric 45", purchasePrice: 219000, fuelType: "electric", fuelConsumption: 14.5, taxCost: 360, serviceCost: 2200 },
+      { model: "Spring Electric 65", purchasePrice: 239000, fuelType: "electric", fuelConsumption: 14.8, taxCost: 360, serviceCost: 2200 },
+    ],
+  },
+  {
+    brand: "DS",
+    models: [
+      { model: "DS 3 Hybrid", purchasePrice: 349000, fuelType: "hybrid", fuelConsumption: 4.9, taxCost: 1100, serviceCost: 3600 },
+      { model: "DS 3 E-Tense", purchasePrice: 429000, fuelType: "electric", fuelConsumption: 15.8, taxCost: 360, serviceCost: 2500 },
+      { model: "DS 4 Hybrid", purchasePrice: 429000, fuelType: "hybrid", fuelConsumption: 5.1, taxCost: 1200, serviceCost: 3900 },
+      { model: "DS 7 Plug-In Hybrid 225", purchasePrice: 589000, fuelType: "hybrid", fuelConsumption: 1.5, taxCost: 600, serviceCost: 4600 },
+    ],
+  },
+  {
+    brand: "Fiat",
+    models: [
+      { model: "Panda Hybrid", purchasePrice: 199000, fuelType: "hybrid", fuelConsumption: 5.0, taxCost: 900, serviceCost: 2600 },
+      { model: "500 Hybrid", purchasePrice: 219000, fuelType: "hybrid", fuelConsumption: 4.8, taxCost: 850, serviceCost: 2600 },
+      { model: "600 Hybrid", purchasePrice: 309000, fuelType: "hybrid", fuelConsumption: 4.9, taxCost: 1000, serviceCost: 3200 },
+      { model: "600e", purchasePrice: 399000, fuelType: "electric", fuelConsumption: 15.2, taxCost: 360, serviceCost: 2400 },
+      { model: "Tipo 1.5 Hybrid", purchasePrice: 309000, fuelType: "hybrid", fuelConsumption: 5.2, taxCost: 1100, serviceCost: 3400 },
+    ],
+  },
+  {
+    brand: "Honda",
+    models: [
+      { model: "Jazz e:HEV", purchasePrice: 289000, fuelType: "hybrid", fuelConsumption: 4.6, taxCost: 1000, serviceCost: 3200 },
+      { model: "Civic e:HEV", purchasePrice: 419000, fuelType: "hybrid", fuelConsumption: 4.8, taxCost: 1100, serviceCost: 3900 },
+      { model: "HR-V e:HEV", purchasePrice: 369000, fuelType: "hybrid", fuelConsumption: 5.4, taxCost: 1200, serviceCost: 3600 },
+      { model: "CR-V e:HEV", purchasePrice: 519000, fuelType: "hybrid", fuelConsumption: 5.9, taxCost: 1300, serviceCost: 4400 },
+      { model: "e:Ny1", purchasePrice: 529000, fuelType: "electric", fuelConsumption: 18.2, taxCost: 360, serviceCost: 2800 },
+    ],
+  },
+  {
+    brand: "Jeep",
+    models: [
+      { model: "Avenger e-Hybrid", purchasePrice: 329000, fuelType: "hybrid", fuelConsumption: 5.0, taxCost: 1000, serviceCost: 3400 },
+      { model: "Avenger Electric", purchasePrice: 429000, fuelType: "electric", fuelConsumption: 15.4, taxCost: 360, serviceCost: 2500 },
+      { model: "Compass e-Hybrid", purchasePrice: 449000, fuelType: "hybrid", fuelConsumption: 6.4, taxCost: 1300, serviceCost: 4200 },
+      { model: "Wrangler 4xe", purchasePrice: 879000, fuelType: "hybrid", fuelConsumption: 3.5, taxCost: 700, serviceCost: 5200 },
+      { model: "Grand Cherokee 4xe", purchasePrice: 959000, fuelType: "hybrid", fuelConsumption: 3.3, taxCost: 700, serviceCost: 5600 },
+      { model: "Wagoneer S", purchasePrice: 685000, fuelType: "electric", fuelConsumption: 22.5, taxCost: 360, serviceCost: 3200 },
+    ],
+  },
+  {
+    brand: "Lexus",
+    models: [
+      { model: "LBX", purchasePrice: 369000, fuelType: "hybrid", fuelConsumption: 4.5, taxCost: 1000, serviceCost: 3600 },
+      { model: "UX 300h", purchasePrice: 439000, fuelType: "hybrid", fuelConsumption: 5.2, taxCost: 1100, serviceCost: 3800 },
+      { model: "NX 350h", purchasePrice: 629000, fuelType: "hybrid", fuelConsumption: 5.9, taxCost: 1300, serviceCost: 4600 },
+      { model: "RX 450h+", purchasePrice: 859000, fuelType: "hybrid", fuelConsumption: 1.2, taxCost: 600, serviceCost: 5400 },
+      { model: "RZ 450e", purchasePrice: 799000, fuelType: "electric", fuelConsumption: 18.7, taxCost: 360, serviceCost: 3200 },
+    ],
+  },
+  {
+    brand: "Mini",
+    models: [
+      { model: "Cooper C", purchasePrice: 339000, fuelType: "petrol", fuelConsumption: 5.8, taxCost: 1200, serviceCost: 3400 },
+      { model: "Cooper SE", purchasePrice: 429000, fuelType: "electric", fuelConsumption: 14.9, taxCost: 360, serviceCost: 2400 },
+      { model: "Aceman SE", purchasePrice: 449000, fuelType: "electric", fuelConsumption: 15.4, taxCost: 360, serviceCost: 2500 },
+      { model: "Countryman C", purchasePrice: 439000, fuelType: "petrol", fuelConsumption: 6.6, taxCost: 1400, serviceCost: 3900 },
+      { model: "Countryman SE ALL4", purchasePrice: 579000, fuelType: "electric", fuelConsumption: 17.0, taxCost: 360, serviceCost: 2800 },
+    ],
+  },
+  {
+    brand: "Mitsubishi",
+    models: [
+      { model: "Space Star 1.2", purchasePrice: 189000, fuelType: "petrol", fuelConsumption: 4.9, taxCost: 850, serviceCost: 2600 },
+      { model: "Colt Hybrid", purchasePrice: 279000, fuelType: "hybrid", fuelConsumption: 4.4, taxCost: 950, serviceCost: 3000 },
+      { model: "ASX 1.3T", purchasePrice: 299000, fuelType: "petrol", fuelConsumption: 6.2, taxCost: 1300, serviceCost: 3400 },
+      { model: "Eclipse Cross PHEV", purchasePrice: 499000, fuelType: "hybrid", fuelConsumption: 2.0, taxCost: 600, serviceCost: 4200 },
+      { model: "Outlander PHEV", purchasePrice: 619000, fuelType: "hybrid", fuelConsumption: 1.8, taxCost: 600, serviceCost: 4700 },
+    ],
+  },
+  {
+    brand: "Opel",
+    models: [
+      { model: "Corsa 1.2 Turbo", purchasePrice: 239000, fuelType: "petrol", fuelConsumption: 5.4, taxCost: 1000, serviceCost: 3000 },
+      { model: "Corsa Electric", purchasePrice: 369000, fuelType: "electric", fuelConsumption: 15.7, taxCost: 360, serviceCost: 2400 },
+      { model: "Astra 1.2 Turbo", purchasePrice: 319000, fuelType: "petrol", fuelConsumption: 5.8, taxCost: 1100, serviceCost: 3400 },
+      { model: "Grandland Hybrid", purchasePrice: 409000, fuelType: "hybrid", fuelConsumption: 5.0, taxCost: 1100, serviceCost: 3800 },
+      { model: "Frontera Electric", purchasePrice: 429000, fuelType: "electric", fuelConsumption: 18.1, taxCost: 360, serviceCost: 2600 },
+    ],
+  },
+  {
+    brand: "Subaru",
+    models: [
+      { model: "Crosstrek 2.0i", purchasePrice: 399000, fuelType: "petrol", fuelConsumption: 7.2, taxCost: 1500, serviceCost: 4200 },
+      { model: "Forester e-Boxer", purchasePrice: 459000, fuelType: "hybrid", fuelConsumption: 6.7, taxCost: 1400, serviceCost: 4300 },
+      { model: "Outback 2.5i", purchasePrice: 489000, fuelType: "petrol", fuelConsumption: 7.5, taxCost: 1600, serviceCost: 4500 },
+      { model: "Solterra", purchasePrice: 599000, fuelType: "electric", fuelConsumption: 17.8, taxCost: 360, serviceCost: 2800 },
+      { model: "BRZ", purchasePrice: 439000, fuelType: "petrol", fuelConsumption: 8.1, taxCost: 1900, serviceCost: 4200 },
+    ],
+  },
+  {
+    brand: "Suzuki",
+    models: [
+      { model: "Swift Hybrid", purchasePrice: 229000, fuelType: "hybrid", fuelConsumption: 4.4, taxCost: 850, serviceCost: 2700 },
+      { model: "Vitara Hybrid", purchasePrice: 309000, fuelType: "hybrid", fuelConsumption: 5.3, taxCost: 1000, serviceCost: 3200 },
+      { model: "S-Cross Hybrid", purchasePrice: 329000, fuelType: "hybrid", fuelConsumption: 5.5, taxCost: 1100, serviceCost: 3300 },
+      { model: "Across Plug-in Hybrid", purchasePrice: 579000, fuelType: "hybrid", fuelConsumption: 1.1, taxCost: 600, serviceCost: 3900 },
+    ],
+  },
+  {
     brand: "Cupra",
     models: [
       { model: "Born", purchasePrice: 400000, fuelType: "electric", fuelConsumption: 15.5, taxCost: 360, serviceCost: 2800 },
@@ -284,7 +416,12 @@ function canonicalizeDatabaseBrand(brand: string): string {
   const trimmedBrand = brand.trim();
   if (!trimmedBrand) return "";
 
-  return BRAND_NAME_ALIASES[trimmedBrand.toLowerCase()] ?? trimmedBrand;
+  const normalizedBrand = trimmedBrand
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return BRAND_NAME_ALIASES[normalizedBrand] ?? trimmedBrand;
 }
 
 export function getModels(brand: string): CarModel[] {
@@ -298,7 +435,11 @@ export function findCarModel(brand: string, model: string): CarModel | undefined
 }
 
 function normalizeModelKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function inferFuelTypeFromText(value: string): FuelType | null {
@@ -518,11 +659,16 @@ export function estimatePurchasePrice(
 ): PurchasePriceEstimate {
   const exactModel = findCarModel(brand, model);
   if (exactModel) {
+    const currentYear = new Date().getFullYear();
+    const isCurrentGenerationPrice = modelYear >= currentYear - 1;
+
     return {
-      priceSek: applyModelYearAdjustment(exactModel.purchasePrice, modelYear, exactModel.fuelType),
+      priceSek: isCurrentGenerationPrice
+        ? exactModel.purchasePrice
+        : applyModelYearAdjustment(exactModel.purchasePrice, modelYear, exactModel.fuelType),
       sampleSize: 1,
       basis: "local_model",
-      priceSource: "historical_average",
+      priceSource: isCurrentGenerationPrice ? "official_new" : "historical_average",
     };
   }
 

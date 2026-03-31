@@ -23,7 +23,11 @@ export interface FuelEconomyVehicle {
 }
 
 function normalizeLookupText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function parseXml(xml: string): Document {

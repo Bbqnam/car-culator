@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
+import { CarInput, CarResult, Currency, formatCurrency, generateVerdict } from "@/lib/car-types";
 import { getBrandLogo } from "@/lib/brand-logos";
 import {
   BarChart,
@@ -17,6 +17,7 @@ import { CommercialOffersDialog } from "@/components/results/CommercialOffersDia
 import { tx } from "@/components/results/results-panel-copy";
 
 interface ResultsPanelProps {
+  cars: CarInput[];
   results: CarResult[];
   currency: Currency;
 }
@@ -48,14 +49,16 @@ const CHART_COLORS = {
   normal: "hsl(220,8%,78%)",
 };
 
-export function ResultsPanel({ results, currency }: ResultsPanelProps) {
+export function ResultsPanel({ cars, results, currency }: ResultsPanelProps) {
   const { language } = useI18n();
   const [tab, setTab] = useState<Tab>("overview");
 
   if (results.length === 0) return null;
 
+  const carById = new Map(cars.map((car) => [car.id, car]));
   const resultsWithVerdicts = results.map((r) => ({
     ...r,
+    car: carById.get(r.id),
     verdict: generateVerdict(r, results),
   }));
 
@@ -114,7 +117,7 @@ function OverviewTab({
   currency,
   language,
 }: {
-  sorted: (CarResult & { verdict: string })[];
+  sorted: (CarResult & { car?: CarInput; verdict: string })[];
   currency: Currency;
   language: Language;
 }) {
@@ -163,8 +166,6 @@ function OverviewTab({
             <OverviewResultCard
               result={leadResult}
               isCheapest={isMulti}
-              diff={0}
-              isMulti={isMulti}
               currency={currency}
               language={language}
               onOpenOffers={() => setDetailsId(leadResult.id)}
@@ -200,8 +201,6 @@ function OverviewTab({
                     key={result.id}
                     result={result}
                     isCheapest={false}
-                    diff={result.monthlyCost - cheapestMånad}
-                    isMulti={isMulti}
                     currency={currency}
                     language={language}
                     onOpenOffers={() => setDetailsId(result.id)}
@@ -219,8 +218,6 @@ function OverviewTab({
             key={result.id}
             result={result}
             isCheapest={idx === 0 && isMulti}
-            diff={result.monthlyCost - cheapestMånad}
-            isMulti={isMulti}
             currency={currency}
             language={language}
             onOpenOffers={() => setDetailsId(result.id)}
@@ -252,29 +249,27 @@ function OverviewTab({
 function OverviewResultCard({
   result,
   isCheapest,
-  diff,
-  isMulti,
   currency,
   language,
   onOpenOffers,
 }: {
-  result: CarResult & { verdict: string };
+  result: CarResult & { car?: CarInput; verdict: string };
   isCheapest: boolean;
-  diff: number;
-  isMulti: boolean;
   currency: Currency;
   language: Language;
   onOpenOffers: () => void;
 }) {
+  const decisionStats = getDecisionStats(result, currency, language);
+
   return (
     <div
-      className={`rounded-xl border p-4 transition-all ${
+      className={`rounded-xl border p-3.5 sm:p-4 transition-all ${
         isCheapest
           ? "bg-highlight-soft border-highlight/25 ring-1 ring-highlight/15"
           : "bg-background border-border/60"
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
           {result.brand && <BrandLogo brand={result.brand} size="md" />}
           <div className="min-w-0">
@@ -293,44 +288,31 @@ function OverviewResultCard({
           </div>
         </div>
 
-        <div className="text-left sm:text-right shrink-0">
-          <div className="text-[1.75rem] sm:text-2xl font-bold tracking-tight tabular-nums">
+        <div className="text-left sm:text-right shrink-0 sm:pt-0.5">
+          <div className="text-[1.7rem] sm:text-[2.05rem] font-bold tracking-tight tabular-nums leading-none">
             {formatCurrency(result.monthlyCost, currency)}
           </div>
-          <div className="text-xs text-muted-foreground">{language === "sv" ? "/mån" : "/mo"}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{language === "sv" ? "/mån" : "/mo"}</div>
         </div>
       </div>
 
-      <div
-        className="mt-3 grid gap-x-3 gap-y-2.5 border-t border-border/50 pt-3"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}
-      >
-        <MiniStat
-          label={tx(language, "Totalt")}
-          value={formatCurrency(result.totalOwnershipCost, currency)}
-        />
-        <MiniStat
-          label={tx(language, "Per år")}
-          value={formatCurrency(result.yearlyCost, currency)}
-        />
-        <MiniStat
-          label={tx(language, "Per km")}
-          value={formatCurrency(result.costPerKm, currency)}
-        />
-        <MiniStat
-          label={diff > 0 && isMulti ? tx(language, "jämfört med billigast") : tx(language, "Restvärde")}
-          value={
-            diff > 0 && isMulti
-              ? `+${formatCurrency(diff, currency)}${language === "sv" ? "/mån" : "/mo"}`
-              : result.residualValuePercent > 0
-              ? `${result.residualValuePercent}%`
-              : "—"
-          }
-          accent={diff > 0 && isMulti ? "negative" : undefined}
-        />
+      <div className="mt-2.5 grid grid-cols-1 gap-x-3 gap-y-2.5 border-t border-border/50 pt-2.5 sm:grid-cols-3">
+        {decisionStats.map((stat) => (
+          <MiniStat
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            accent={stat.accent}
+          />
+        ))}
       </div>
 
-      <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div
+        className={[
+          "mt-2 flex flex-col gap-2 lg:flex-row lg:items-center",
+          result.verdict ? "lg:justify-between" : "lg:justify-end",
+        ].join(" ")}
+      >
         {result.verdict ? (
           <div
             className={[
@@ -352,9 +334,7 @@ function OverviewResultCard({
               {tx(language, result.verdict)}
             </p>
           </div>
-        ) : (
-          <div className="hidden lg:block lg:flex-1" />
-        )}
+        ) : null}
 
         <button
           type="button"
@@ -377,20 +357,113 @@ function MiniStat({
 }: {
   label: string;
   value: string;
-  accent?: "negative";
+  accent?: "negative" | "positive";
 }) {
   return (
     <div className="min-w-0">
       <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
       <div
-        className={`text-[15px] font-semibold tabular-nums leading-tight whitespace-nowrap ${
-          accent === "negative" ? "text-destructive" : "text-foreground"
+        className={`text-[15px] font-semibold tabular-nums leading-tight ${
+          accent === "negative"
+            ? "text-destructive"
+            : accent === "positive"
+            ? "text-highlight"
+            : "text-foreground"
         }`}
       >
         {value}
       </div>
     </div>
   );
+}
+
+function getDecisionStats(
+  result: CarResult & { car?: CarInput },
+  currency: Currency,
+  language: Language,
+): Array<{ label: string; value: string; accent?: "negative" | "positive" }> {
+  const car = result.car;
+  const durationMonths = result.ownershipMonths;
+  const durationLabel = formatDuration(durationMonths, language);
+
+  if (result.financingMode === "cash") {
+    const purchasePrice = car?.purchasePrice ?? estimatePurchasePriceFromResult(result);
+    const residualValue = purchasePrice > 0
+      ? Math.round(purchasePrice * (result.residualValuePercent / 100))
+      : 0;
+
+    return [
+      {
+        label: language === "sv" ? "Direkt idag" : "Upfront today",
+        value: purchasePrice > 0 ? formatCurrency(purchasePrice, currency) : "—",
+      },
+      {
+        label: language === "sv" ? "Vid periodens slut" : "End of term",
+        value: language === "sv" ? "Du behåller bilen" : "You still own the car",
+        accent: "positive",
+      },
+      {
+        label: language === "sv" ? "Beräknat restvärde" : "Estimated resale value",
+        value: residualValue > 0 ? formatCurrency(residualValue, currency) : "—",
+      },
+    ];
+  }
+
+  if (result.financingMode === "loan") {
+    return [
+      {
+        label: language === "sv" ? "Direkt idag" : "Upfront today",
+        value: formatCurrency(car?.loan.downPayment ?? result.breakdown.downPayment, currency),
+      },
+      {
+        label: language === "sv" ? "Vid periodens slut" : "End of term",
+        value: language === "sv" ? `Du äger bilen om ${durationLabel}` : `Own it after ${durationLabel}`,
+        accent: "positive",
+      },
+      {
+        label: language === "sv" ? "Ränta och avgifter" : "Interest and fees",
+        value: formatCurrency(result.breakdown.financingCost, currency),
+      },
+    ];
+  }
+
+  const mileagePenalty = result.breakdown.mileagePenalty;
+  const includedMileage = car?.leasing.includedMileage ?? 0;
+
+  return [
+    {
+      label: language === "sv" ? "Direkt idag" : "Upfront today",
+      value: formatCurrency(car?.leasing.downPayment ?? result.breakdown.downPayment, currency),
+    },
+    {
+      label: language === "sv" ? "Vid periodens slut" : "End of term",
+      value: language === "sv" ? `Lämnas tillbaka efter ${durationLabel}` : `Return it after ${durationLabel}`,
+    },
+    mileagePenalty > 0
+      ? {
+          label: language === "sv" ? "Beräknad övermilskostnad" : "Projected over-mile fee",
+          value: formatCurrency(mileagePenalty, currency),
+          accent: "negative",
+        }
+      : {
+          label: language === "sv" ? "Inkluderad körsträcka" : "Included mileage",
+          value: includedMileage > 0
+            ? (language === "sv"
+              ? `${includedMileage.toLocaleString("sv-SE")} km/år`
+              : `${includedMileage.toLocaleString("en-US")} km/yr`)
+            : "—",
+        },
+  ];
+}
+
+function formatDuration(months: number, language: Language): string {
+  return language === "sv" ? `${months} månader` : `${months} months`;
+}
+
+function estimatePurchasePriceFromResult(result: CarResult): number {
+  const retainedShare = 1 - result.residualValuePercent / 100;
+  if (retainedShare <= 0) return 0;
+  return Math.round(result.totalDepreciation / retainedShare);
 }
 
 // ─── Breakdown Tab ───────────────────────────────────────────────────────────
