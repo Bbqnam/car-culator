@@ -88,10 +88,10 @@ export function NumericInput({
       </div>
       <div
         className={[
-          "flex min-h-11 h-auto w-full overflow-hidden rounded-md bg-white transition-all sm:min-h-[2.5rem]",
+          "flex min-h-11 h-auto w-full overflow-hidden rounded-md bg-card/95 text-foreground transition-all sm:min-h-[2.5rem] dark:bg-slate-950/88",
           showRequired
-            ? "border border-amber-300 ring-1 ring-amber-100"
-            : "border border-border/60 hover:border-border/90 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/10",
+            ? "border border-amber-300 ring-1 ring-amber-100 dark:border-amber-400/45 dark:ring-amber-500/12"
+            : "border border-border/60 hover:border-border/90 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/10 dark:border-white/10 dark:hover:border-white/18 dark:focus-within:border-emerald-400/35 dark:focus-within:ring-emerald-500/12",
         ].join(" ")}
       >
         <input
@@ -104,12 +104,14 @@ export function NumericInput({
           onBlur={handleBlur}
           onChange={handleChange}
           className={[
-            "h-full w-full min-w-0 bg-transparent px-3 py-2.5 text-sm outline-none",
-            showRequired ? "placeholder:text-amber-400/60" : "placeholder:text-muted-foreground/35",
+            "h-full w-full min-w-0 bg-transparent px-3 py-2.5 text-sm text-foreground outline-none",
+            showRequired
+              ? "placeholder:text-amber-400/60 dark:placeholder:text-amber-300/45"
+              : "placeholder:text-muted-foreground/35 dark:placeholder:text-slate-500",
           ].join(" ")}
         />
         {unit && (
-          <span className="shrink-0 border-l border-border/50 px-3 text-[11px] text-muted-foreground/65 inline-flex items-center whitespace-nowrap">
+          <span className="inline-flex shrink-0 items-center whitespace-nowrap border-l border-border/50 px-3 text-[11px] text-muted-foreground/65 dark:border-white/10 dark:text-slate-400">
             {unit}
           </span>
         )}
@@ -139,12 +141,12 @@ export function ReadonlyField({
           {hint && <FieldHint text={hint} />}
         </div>
       </div>
-      <div className="min-h-11 h-auto py-2.5 flex items-center justify-between px-3 rounded-md bg-secondary/40 border border-border/40 sm:min-h-[2.5rem]">
+      <div className="flex min-h-11 h-auto items-center justify-between rounded-md border border-border/40 bg-secondary/40 px-3 py-2.5 sm:min-h-[2.5rem] dark:border-white/10 dark:bg-slate-950/65">
         <span className="text-sm font-medium text-foreground tabular-nums whitespace-nowrap">
           {value}
         </span>
         {unit && (
-          <span className="text-[11px] text-muted-foreground/60 whitespace-nowrap">{unit}</span>
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground/60 dark:text-slate-400">{unit}</span>
         )}
       </div>
     </div>

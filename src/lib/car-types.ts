@@ -3,7 +3,14 @@ export const FUEL_TYPE_ORDER: FuelType[] = ["petrol", "diesel", "hybrid", "elect
 export type Currency = "SEK" | "EUR" | "USD" | "VND";
 export type FinancingMode = "cash" | "loan" | "leasing";
 export type TaxCostSource = "estimated" | "manual";
-export type PriceSource = "market_listings" | "official_new" | "historical_average" | "manual" | "missing";
+export type PriceSource =
+  | "retailer_listing"
+  | "market_listings"
+  | "official_new"
+  | "catalog_reference"
+  | "historical_average"
+  | "manual"
+  | "missing";
 
 export interface LoanInputs {
   downPayment: number;
@@ -30,6 +37,9 @@ export interface CarInput {
   modelYear: number;
   purchasePrice: number;
   priceSource: PriceSource;
+  priceSourceLabel?: string;
+  priceSourceUrl?: string;
+  priceSourceCheckedAt?: string;
   ownershipYears: number;
   annualMileage: number;
   fuelType: FuelType;
@@ -79,16 +89,34 @@ export interface CarResult {
 
 // ─── Residual value ──────────────────────────────────────────────────────────
 
-export function calculateResidualPercent(years: number, fuelType: FuelType): number {
-  if (years <= 0) return 100;
+function getRetentionFromNewAtAge(ageYears: number, fuelType: FuelType): number {
+  if (ageYears <= 0) return 1;
   const firstYearRetention = fuelType === "electric" ? 0.75 : 0.80;
   const annualRetention = fuelType === "electric" ? 0.88 : 0.87;
-  if (years <= 1) {
-    return Math.round((1 - (1 - firstYearRetention) * years) * 100);
+  if (ageYears <= 1) {
+    return 1 - (1 - firstYearRetention) * ageYears;
   }
-  const remainingYears = years - 1;
-  const residual = firstYearRetention * Math.pow(annualRetention, remainingYears);
-  return Math.round(Math.max(residual * 100, 5));
+  const remainingYears = ageYears - 1;
+  return firstYearRetention * Math.pow(annualRetention, remainingYears);
+}
+
+export function calculateResidualPercent(
+  years: number,
+  fuelType: FuelType,
+  modelYear?: number,
+  referenceYear = new Date().getFullYear(),
+): number {
+  if (years <= 0) return 100;
+
+  const currentAgeYears =
+    typeof modelYear === "number" && Number.isFinite(modelYear)
+      ? Math.max(0, referenceYear - modelYear)
+      : 0;
+  const currentRetention = getRetentionFromNewAtAge(currentAgeYears, fuelType);
+  const futureRetention = getRetentionFromNewAtAge(currentAgeYears + years, fuelType);
+  const residualRatio = currentRetention > 0 ? futureRetention / currentRetention : futureRetention;
+
+  return Math.round(Math.max(residualRatio * 100, 5));
 }
 
 // ─── Loan monthly payment (annuity with optional balloon) ────────────────────
@@ -171,7 +199,7 @@ export function calculateResults(car: CarInput): CarResult {
 
   // ── Cash ───────────────────────────────────────────────────────────────────
   if (car.financingMode === "cash") {
-    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType);
+    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType, car.modelYear);
     const totalDepreciation = car.purchasePrice * (1 - residualPercent / 100);
     const totalOwnershipCost = totalDepreciation + totalFuel + totalInsurance + totalTax + totalService;
 
@@ -202,7 +230,7 @@ export function calculateResults(car: CarInput): CarResult {
     const financingCost = interestCost + totalAdminFees;
 
     // Depreciation based on ownership years (not loan term)
-    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType);
+    const residualPercent = calculateResidualPercent(ownershipYears, car.fuelType, car.modelYear);
     const totalDepreciation = car.purchasePrice * (1 - residualPercent / 100);
 
     // Total = depreciation + financing cost + running costs

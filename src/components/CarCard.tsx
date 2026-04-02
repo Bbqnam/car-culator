@@ -563,7 +563,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const hasSingleFuelType = availableFuelTypes.length <= 1;
   const availableFuelTypeSummary = availableFuelTypes.map(getFuelTypeLabel).join(", ");
 
-  const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType);
+  const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType, car.modelYear);
   const loanAmount = Math.max(0, car.purchasePrice - car.loan.downPayment);
   const selectedLiveOption = lookupVariantOptions.find((option) => option.id === lookupOptionId);
   const selectedEuEvVariant = euEvVariants.find((variant) => variant.id === lookupOptionId);

@@ -270,6 +270,25 @@ function encodeSvg(value: string): string {
     .replace(/%20/g, " ");
 }
 
+function getHexChannel(value: string, start: number): number {
+  return Number.parseInt(value.slice(start, start + 2), 16) / 255;
+}
+
+function toLinearChannel(value: number): number {
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+
+function getHexLuminance(hex: string): number {
+  const normalized = hex.trim().replace(/^#/, "");
+  if (normalized.length !== 6) return 1;
+
+  const red = toLinearChannel(getHexChannel(normalized, 0));
+  const green = toLinearChannel(getHexChannel(normalized, 2));
+  const blue = toLinearChannel(getHexChannel(normalized, 4));
+
+  return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue);
+}
+
 function buildSimpleIconLogo(icon: SimpleIcon): string {
   const cached = SIMPLE_ICON_LOGO_CACHE.get(icon.slug);
   if (cached) return cached;
@@ -311,6 +330,18 @@ export function getBrandLogo(brand: string): string | null {
   }
 
   return null;
+}
+
+export function shouldElevateBrandLogoInDarkMode(brand: string): boolean {
+  const canonicalBrand = canonicalizeBrandName(brand);
+  if (!canonicalBrand || BRAND_LOGOS[canonicalBrand]) {
+    return false;
+  }
+
+  const simpleIcon = getBrandSimpleIcon(canonicalBrand);
+  if (!simpleIcon) return false;
+
+  return getHexLuminance(simpleIcon.hex) < 0.18;
 }
 
 export function getBrandAccent(brand: string): string {

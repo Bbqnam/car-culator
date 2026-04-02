@@ -43,8 +43,8 @@ export function AddCarModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-x-0 border-b-0 p-0 sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[92vh] sm:w-[90vw] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border">
-        <div className="border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur-sm">
+      <DialogContent className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-x-0 border-b-0 bg-background/96 p-0 sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[92vh] sm:w-[90vw] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border dark:border-white/10 dark:bg-slate-950/96">
+        <div className="border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/88">
           <DialogTitle className="text-sm sm:text-base">
             {t({ en: "Configure car", sv: "Konfigurera bil" })}
           </DialogTitle>
@@ -80,16 +80,16 @@ export function AddCarModal({
             </div>
           </div>
 
-          <DialogFooter className="border-t border-border/60 bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4">
+          <DialogFooter className="border-t border-border/60 bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 dark:border-white/10 dark:bg-slate-950/88">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto dark:border-white/12 dark:bg-transparent dark:hover:bg-white/5 dark:hover:text-slate-100"
             >
               {t({ en: "Cancel", sv: "Avbryt" })}
             </Button>
-            <Button type="submit" disabled={!canConfirm} className="w-full sm:w-auto">
+            <Button type="submit" disabled={!canConfirm} className="w-full sm:w-auto dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400">
               OK
             </Button>
           </DialogFooter>

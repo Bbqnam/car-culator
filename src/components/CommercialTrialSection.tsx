@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { getProviderVisual } from "@/lib/provider-logos";
 
 interface CommercialTrialSectionProps {
   winner: CarResult;
@@ -70,8 +71,8 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
           </h3>
           <p className="text-xs text-muted-foreground max-w-[620px]">
             {t({
-              en: "Concept preview focused on loans, leasing, and dealer offers. No live pricing or real-time partner API connections are used in this prototype.",
-              sv: "Konceptförhandsvisning med fokus på lån, leasing och återförsäljarerbjudanden. Inga livepriser eller realtidskopplingar mot partner-API:er används i den här prototypen.",
+              en: "Curated preview for Swedish loans, leasing, and insurance using official source pages where we have verified data. Dealer and inventory layers are still prototype-level.",
+              sv: "Kurerad vy för svenska lån, leasing och försäkring med officiella källsidor där vi har verifierad data. Återförsäljar- och lagerskiktet är fortfarande på prototypnivå.",
             })}
           </p>
         </div>
@@ -80,7 +81,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             {t({ en: "Prototype", sv: "Prototyp" })}
           </Badge>
           <Badge variant="secondary" className="text-[10px]">
-            {t({ en: "Simulated partner data", sv: "Simulerad partnerdata" })}
+            {t({ en: "Official source seeds", sv: "Officiella källfrön" })}
           </Badge>
           <Button
             size="sm"
@@ -107,9 +108,9 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
           <p className="text-xs text-muted-foreground">
             {t({ en: "Best dealer:", sv: "Bästa återförsäljare:" })}{" "}
             <span className="font-semibold text-foreground">
-              {trialData.bestRetailer.providerName}
+              {trialData.bestRetailer?.providerName ?? t({ en: "No verified listing", sv: "Ingen verifierad annons" })}
             </span>{" "}
-            ({trialData.bestRetailer.availability})
+            {trialData.bestRetailer && `(${trialData.bestRetailer.availability})`}
           </p>
         </div>
       )}
@@ -118,7 +119,21 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
         <>
           <div className="grid gap-3 lg:grid-cols-2">
             <BestFinancingCard offer={trialData.bestFinancing} currency={currency} offerTypeLabel={offerTypeLabel} />
-            <BestRetailerCard offer={trialData.bestRetailer} currency={currency} />
+            {trialData.bestRetailer ? (
+              <BestRetailerCard offer={trialData.bestRetailer} currency={currency} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border/70 bg-secondary/20 p-4">
+                <p className="text-sm font-semibold text-foreground">
+                  {t({ en: "Dealer layer disabled until verified feeds are wired", sv: "Återförsäljarlagret är avstängt tills verifierade flöden är inkopplade" })}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                  {t({
+                    en: "Prototype dealer cards used placeholder pricing before. They stay hidden until we can connect verified stock pages or feeds.",
+                    sv: "Prototypens återförsäljarkort använde tidigare platshållarpriser. De hålls dolda tills vi kan koppla verifierade lagersidor eller flöden.",
+                  })}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
@@ -228,7 +243,16 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 )}
 
                 {offerView === "retailer" && (
-                  <RetailerList offers={sortedRetailer} currency={currency} />
+                  sortedRetailer.length > 0 ? (
+                    <RetailerList offers={sortedRetailer} currency={currency} />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground">
+                      {t({
+                        en: "No verified dealer listings are loaded for this car yet. Placeholder dealer pricing has been removed.",
+                        sv: "Inga verifierade återförsäljarannonser är laddade för bilen ännu. Påhittad återförsäljarprissättning har tagits bort.",
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -549,6 +573,7 @@ function OfferBadgeGroup({
 }
 
 function ProviderMark({ name, small = false }: { name: string; small?: boolean }) {
+  const visual = getProviderVisual(name);
   const initials = name
     .split(" ")
     .filter(Boolean)
@@ -560,12 +585,16 @@ function ProviderMark({ name, small = false }: { name: string; small?: boolean }
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-full border border-border/70 bg-secondary text-muted-foreground font-semibold",
-        small ? "h-6 w-6 text-[9px]" : "h-8 w-8 text-[10px]"
+        "inline-flex items-center justify-center overflow-hidden border border-border/70 bg-white text-muted-foreground font-semibold dark:border-white/10 dark:bg-slate-900 dark:text-slate-300",
+        small ? "h-6 w-8 rounded-md text-[9px]" : "h-8 w-11 rounded-lg text-[10px]"
       )}
       aria-hidden="true"
     >
-      {initials}
+      {visual.logoSrc ? (
+        <img src={visual.logoSrc} alt="" className="max-h-full max-w-full object-contain p-1" />
+      ) : (
+        initials
+      )}
     </span>
   );
 }
