@@ -22,10 +22,32 @@ describe("shouldPreferMarketPriceEstimate", () => {
     })).toBe(true);
   });
 
+  it("prefers strong market prices over seeded catalog references", () => {
+    expect(shouldPreferMarketPriceEstimate({
+      currentPriceSource: "catalog_reference",
+      currentPurchasePrice: 429000,
+      hasLocalModelMatch: true,
+      modelYear: 2025,
+      estimate: strongExactEstimate,
+      currentYear: 2026,
+    })).toBe(true);
+  });
+
   it("does not replace official new pricing with market listings", () => {
     expect(shouldPreferMarketPriceEstimate({
       currentPriceSource: "official_new",
       currentPurchasePrice: 685000,
+      hasLocalModelMatch: true,
+      modelYear: 2025,
+      estimate: strongExactEstimate,
+      currentYear: 2026,
+    })).toBe(false);
+  });
+
+  it("does not replace a verified retailer price with marketplace listings", () => {
+    expect(shouldPreferMarketPriceEstimate({
+      currentPriceSource: "retailer_listing",
+      currentPurchasePrice: 415000,
       hasLocalModelMatch: true,
       modelYear: 2025,
       estimate: strongExactEstimate,

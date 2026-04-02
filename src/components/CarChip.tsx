@@ -24,12 +24,16 @@ function getPriceSourceLabel(
   t: (text: { en: string; sv: string }) => string,
 ): string {
   switch (source) {
-    case "market_listings":
-      return t({ en: "Swedish market listings", sv: "Svenska marknadsannonser" });
     case "official_new":
-      return t({ en: "Official new price", sv: "Officiellt nypris" });
+      return t({ en: "Official manufacturer price", sv: "Officiellt tillverkarpris" });
+    case "retailer_listing":
+      return t({ en: "Retailer price", sv: "Pris från återförsäljare" });
+    case "market_listings":
+      return t({ en: "Marketplace price", sv: "Pris från marknadsannonser" });
+    case "catalog_reference":
+      return t({ en: "Fallback reference price", sv: "Reservpris från referensdata" });
     case "historical_average":
-      return t({ en: "Historical / average", sv: "Historiskt / genomsnitt" });
+      return t({ en: "Fallback historical / average", sv: "Reservpris från historik / genomsnitt" });
     case "manual":
       return t({ en: "Manual", sv: "Manuellt" });
     default:
@@ -144,7 +148,7 @@ export function CarChip({
                 {FINANCING_LABELS[car.financingMode]}
               </span>
             </div>
-            <div className="min-h-[2.9rem] pr-1">
+            <div className="min-h-[2.25rem] overflow-hidden pr-1">
               {brandPart ? (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
@@ -161,8 +165,9 @@ export function CarChip({
                     </span>
                   </div>
                   <p
-                    className="text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    className="truncate whitespace-nowrap text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug"
                     style={{ color: brandAccent }}
+                    title={modelPart}
                   >
                     {modelPart}
                   </p>
@@ -174,8 +179,9 @@ export function CarChip({
               ) : (
                 <div className="space-y-1">
                   <p
-                    className="text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug line-clamp-3"
+                    className="truncate whitespace-nowrap text-[1.05rem] sm:text-[1.15rem] font-extrabold leading-snug"
                     style={{ color: brandAccent }}
+                    title={displayName}
                   >
                     {displayName}
                   </p>

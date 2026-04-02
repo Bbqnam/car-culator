@@ -14,6 +14,7 @@ import {
   findCarModel,
   getDefaultFuelPrice,
   estimatePurchasePrice,
+  getDisplayModelName,
   inferFuelTypeFromText,
   inferAvailableFuelTypes,
 } from "@/lib/car-database";
@@ -29,15 +30,26 @@ import {
 import {
   EuEvModelCatalogEntry,
   EuEvVariant,
+  EU_EV_SOURCE_URL,
   fetchEuEvBrands,
   fetchEuEvModels,
   fetchEuEvVariants,
 } from "@/lib/eu-ev-api";
 import { convertEurToSek } from "@/lib/currency-api";
 import {
+  formatRateLabel,
+  getLeasingAvailability,
+  getLoanBenchmarks,
+  getPreferredLoanDefaults,
+  getSuggestedLeaseDefaults,
+} from "@/lib/financing-data";
+import {
   fetchMarketPriceEstimate,
   shouldPreferMarketPriceEstimate,
 } from "@/lib/market-price-api";
+import { findVerifiedRetailerPrice } from "@/lib/commercial-trial";
+import { findVerifiedOfficialPrice } from "@/lib/official-car-prices";
+import { choosePreferredPriceCandidate, type PriceCandidate } from "@/lib/price-source";
 import { estimateSwedishVehicleTax } from "@/lib/swedish-tax";
 import { Label } from "@/components/ui/label";
 import {
@@ -81,6 +93,20 @@ function normalizeLookupText(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function toAutomaticPriceCandidate(
+  priceSek: number,
+  priceSource: PriceSource,
+): PriceCandidate | null {
+  if (priceSek <= 0 || priceSource === "manual" || priceSource === "missing") {
+    return null;
+  }
+
+  return {
+    priceSek,
+    priceSource,
+  };
+}
+
 function applyEstimatedTax(car: CarInput, co2Override?: number | null): CarInput {
   const estimate = estimateSwedishVehicleTax({
     fuelType: car.fuelType,
@@ -102,19 +128,29 @@ function getPriceSourceMeta(
   t: (text: { en: string; sv: string }) => string,
 ): { label: string; toneClass: string } {
   switch (source) {
-    case "market_listings":
-      return {
-        label: t({ en: "Swedish market listings", sv: "Svenska marknadsannonser" }),
-        toneClass: "text-sky-700",
-      };
     case "official_new":
       return {
-        label: t({ en: "Official new price", sv: "Officiellt nypris" }),
+        label: t({ en: "Official manufacturer price", sv: "Officiellt tillverkarpris" }),
         toneClass: "text-emerald-700",
+      };
+    case "retailer_listing":
+      return {
+        label: t({ en: "Retailer price", sv: "Pris från återförsäljare" }),
+        toneClass: "text-indigo-700",
+      };
+    case "market_listings":
+      return {
+        label: t({ en: "Marketplace price", sv: "Pris från marknadsannonser" }),
+        toneClass: "text-sky-700",
+      };
+    case "catalog_reference":
+      return {
+        label: t({ en: "Fallback reference price", sv: "Reservpris från referensdata" }),
+        toneClass: "text-amber-700",
       };
     case "historical_average":
       return {
-        label: t({ en: "Historical / average price", sv: "Historiskt / genomsnittligt pris" }),
+        label: t({ en: "Fallback historical / average price", sv: "Reservpris från historik / genomsnitt" }),
         toneClass: "text-muted-foreground",
       };
     case "manual":
@@ -169,16 +205,37 @@ function FieldLabelWithHint({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
+function formatIsoDate(
+  value: string | undefined,
+  locale: string,
+): string | null {
+  if (!value) return null;
+
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
+}
+
 export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemove, onDuplicate }: CarCardProps) {
   const { language, t } = useI18n();
   const formGridClass = "grid gap-2.5 grid-cols-1 md:grid-cols-2";
+  const locale = language === "sv" ? "sv-SE" : "en-GB";
   const [lookupModel, setLookupModel] = useState("");
   const [lookupOptionId, setLookupOptionId] = useState("");
   const [lookupMessage, setLookupMessage] = useState("");
   const [isImportingOfficialData, setIsImportingOfficialData] = useState(false);
   const lastAutoImportKeyRef = useRef("");
+  const lastOfficialPriceKeyRef = useRef("");
+  const lastRetailerPriceKeyRef = useRef("");
   const lastEuModelPriceKeyRef = useRef("");
   const lastMarketPriceKeyRef = useRef("");
+  const currentYear = new Date().getFullYear();
+  const isCurrentGenerationModel = car.modelYear >= currentYear - 1;
 
   const localBrands = useMemo(() => getBrands(), []);
   const localModels = useMemo(() => (car.brand ? getModels(car.brand) : []), [car.brand]);
@@ -190,6 +247,51 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     en: "Tax is estimated.",
     sv: "Skatt är uppskattad.",
   });
+  const buildSuggestedLoanInputs = useCallback(
+    (fuelType: FuelType, purchasePrice: number, currentLoan: CarInput["loan"]) => {
+      const suggestion = getPreferredLoanDefaults(fuelType);
+      return {
+        ...currentLoan,
+        interestRate: suggestion.interestRatePercent,
+        loanTermMonths: suggestion.loanTermMonths,
+        monthlyAdminFee: suggestion.monthlyAdminFee,
+        downPayment: purchasePrice > 0
+          ? Math.round((purchasePrice * suggestion.downPaymentPercent) / 100)
+          : 0,
+        residualBalloon: purchasePrice > 0
+          ? Math.round((purchasePrice * suggestion.residualBalloonPercent) / 100)
+          : 0,
+      };
+    },
+    [],
+  );
+  const buildSuggestedLeasingInputs = useCallback(
+    (
+      brand: string,
+      model: string,
+      annualMileage: number,
+      currentLeasing: CarInput["leasing"],
+    ) => {
+      const defaults = getSuggestedLeaseDefaults(brand, model);
+      if (!defaults) {
+        return {
+          ...currentLeasing,
+          monthlyLeaseCost: 0,
+          downPayment: 0,
+          leaseDurationMonths: currentLeasing.leaseDurationMonths || 36,
+          includedMileage: currentLeasing.includedMileage || annualMileage || 15000,
+          excessMileageCostPerKm: currentLeasing.excessMileageCostPerKm || 1.5,
+          endOfTermFee: 0,
+        };
+      }
+
+      return {
+        ...currentLeasing,
+        ...defaults,
+      };
+    },
+    [],
+  );
 
   const fuelEconomyBrandsQuery = useQuery({
     queryKey: ["fuel-economy-brands", car.modelYear],
@@ -300,11 +402,12 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const modelNames = useMemo(
     () =>
       [...new Set([
-        ...localModels.map((item) => item.model),
-        ...liveModels,
-        ...euEvModels.map((item) => item.model),
+        ...(car.model ? [getDisplayModelName(car.brand, car.model)] : []),
+        ...localModels.map((item) => getDisplayModelName(car.brand, item.model)),
+        ...liveModels.map((item) => getDisplayModelName(car.brand, item)),
+        ...euEvModels.map((item) => getDisplayModelName(car.brand, item.model)),
       ])].sort((a, b) => a.localeCompare(b)),
-    [euEvModels, liveModels, localModels],
+    [car.brand, car.model, euEvModels, liveModels, localModels],
   );
 
   const modelYearOptions = useMemo(
@@ -366,6 +469,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       nextCar = {
         ...nextCar,
         priceSource: (partial.purchasePrice ?? 0) > 0 ? "manual" : "missing",
+        priceSourceLabel: undefined,
+        priceSourceUrl: undefined,
+        priceSourceCheckedAt: undefined,
       };
     }
 
@@ -374,7 +480,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       nextCar.isConfigured &&
       nextCar.brand &&
       nextCar.model &&
-      nextCar.priceSource === "historical_average" &&
+      nextCar.priceSource !== "manual" &&
       !Object.prototype.hasOwnProperty.call(partial, "purchasePrice")
     ) {
       const refreshedPriceEstimate = estimatePurchasePrice(
@@ -388,6 +494,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         ...nextCar,
         purchasePrice: refreshedPriceEstimate.priceSek,
         priceSource: refreshedPriceEstimate.priceSource,
+        priceSourceLabel: undefined,
+        priceSourceUrl: undefined,
+        priceSourceCheckedAt: undefined,
       };
     }
 
@@ -435,6 +544,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       modelYear: car.modelYear,
       purchasePrice: 0,
       priceSource: "missing",
+      priceSourceLabel: undefined,
+      priceSourceUrl: undefined,
+      priceSourceCheckedAt: undefined,
       fuelType: "petrol",
       fuelConsumption: 0,
       estimatedCo2GKm: null,
@@ -452,7 +564,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     setLookupMessage("");
 
     const localModel = findCarModel(car.brand, modelName);
-    const euEvModel = euEvModels.find((item) => item.model === modelName);
+    const euEvModel = euEvModels.find((item) => getDisplayModelName(car.brand, item.model) === modelName);
     const inferredFuelType = inferFuelTypeFromText(modelName);
     const liveFuelType: FuelType =
       localModel?.fuelType ??
@@ -469,18 +581,103 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     );
     let purchasePrice = priceEstimate.priceSek;
     let priceSource = priceEstimate.priceSource;
+    let priceSourceLabel: string | undefined;
+    let priceSourceUrl: string | undefined;
+    let priceSourceCheckedAt: string | undefined;
+    const officialPrice = isCurrentGenerationModel
+      ? findVerifiedOfficialPrice(car.brand, modelName, car.modelYear, currentYear)
+      : null;
+    const officialCandidate = officialPrice
+      ? {
+          priceSek: officialPrice.priceSek,
+          priceSource: "official_new" as const,
+          sourceLabel: officialPrice.providerName,
+          sourceUrl: officialPrice.sourceUrl,
+          sourceCheckedAt: officialPrice.checkedAt,
+        }
+      : null;
+    const retailerListing = isCurrentGenerationModel ? findVerifiedRetailerPrice(car.brand, modelName) : null;
+    const retailerCandidate = retailerListing
+      ? {
+          priceSek: retailerListing.priceSek,
+          priceSource: "retailer_listing" as const,
+          sourceLabel: retailerListing.providerName,
+          sourceUrl: retailerListing.sourceUrl,
+          sourceCheckedAt: retailerListing.checkedAt,
+        }
+      : null;
+    let fallbackCandidate = toAutomaticPriceCandidate(priceEstimate.priceSek, priceEstimate.priceSource);
 
-    if (euEvModel?.averagePriceEur) {
+    if (euEvModel?.averagePriceEur && isCurrentGenerationModel) {
       try {
-        purchasePrice = await convertEurToSek(euEvModel.averagePriceEur);
-        priceSource = purchasePrice > 0 ? "official_new" : priceEstimate.priceSource;
+        const euEvCatalogPrice = await convertEurToSek(euEvModel.averagePriceEur);
+        if (euEvCatalogPrice > 0) {
+          fallbackCandidate = {
+            priceSek: euEvCatalogPrice,
+            priceSource: "catalog_reference",
+            sourceLabel: "EU EV catalog",
+            sourceUrl: EU_EV_SOURCE_URL,
+          };
+        }
       } catch {
-        purchasePrice = priceEstimate.priceSek;
-        priceSource = priceEstimate.priceSource;
+        fallbackCandidate ??= toAutomaticPriceCandidate(priceEstimate.priceSek, priceEstimate.priceSource);
       }
     }
 
+    let marketCandidate = null;
+    try {
+      const marketEstimate = await fetchMarketPriceEstimate(car.brand, modelName, car.modelYear);
+      const fallbackPriceSource = fallbackCandidate?.priceSource ?? "missing";
+      const fallbackPurchasePrice = fallbackCandidate?.priceSek ?? 0;
+
+      if (
+        marketEstimate?.priceSek &&
+        shouldPreferMarketPriceEstimate({
+          currentPriceSource: fallbackPriceSource,
+          currentPurchasePrice: fallbackPurchasePrice,
+          hasLocalModelMatch: Boolean(localModel),
+          modelYear: car.modelYear,
+          estimate: marketEstimate,
+          currentYear,
+        })
+      ) {
+        marketCandidate = {
+          priceSek: marketEstimate.priceSek,
+          priceSource: "market_listings" as const,
+          sourceLabel: marketEstimate.providerLabel,
+          sourceUrl: marketEstimate.sourceUrl,
+        };
+      }
+    } catch {
+      // Keep retailer and fallback prices if marketplace lookup fails.
+    }
+
+    const selectedPriceCandidate = choosePreferredPriceCandidate([
+      officialCandidate,
+      retailerCandidate,
+      marketCandidate,
+      fallbackCandidate,
+    ]);
+
+    if (selectedPriceCandidate) {
+      purchasePrice = selectedPriceCandidate.priceSek;
+      priceSource = selectedPriceCandidate.priceSource;
+      priceSourceLabel = selectedPriceCandidate.sourceLabel;
+      priceSourceUrl = selectedPriceCandidate.sourceUrl;
+      priceSourceCheckedAt = selectedPriceCandidate.sourceCheckedAt;
+    } else {
+      purchasePrice = 0;
+      priceSource = "missing";
+    }
+
     const serviceCost = localModel?.serviceCost ?? car.serviceCost;
+    const suggestedLoan = buildSuggestedLoanInputs(liveFuelType, purchasePrice, car.loan);
+    const suggestedLeasing = buildSuggestedLeasingInputs(car.brand, modelName, car.annualMileage, car.leasing);
+    const leasingAvailabilityForModel = getLeasingAvailability(car.brand, modelName);
+    const nextFinancingMode =
+      car.financingMode === "leasing" && leasingAvailabilityForModel.status === "unavailable"
+        ? "loan"
+        : car.financingMode;
 
     onChange(applyEstimatedTax({
       ...car,
@@ -488,6 +685,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       name: `${car.brand} ${modelName}`,
       purchasePrice,
       priceSource,
+      priceSourceLabel,
+      priceSourceUrl,
+      priceSourceCheckedAt,
       fuelType: liveFuelType,
       fuelConsumption: liveFuelConsumption,
       estimatedCo2GKm: euEvModel ? 0 : null,
@@ -496,15 +696,32 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       taxCostSource: "estimated",
       serviceCost,
       isConfigured: true,
-      loan: {
-        ...car.loan,
-        downPayment: purchasePrice > 0 ? Math.round(purchasePrice * 0.2) : 0,
-        residualBalloon: 0,
-      },
+      financingMode: nextFinancingMode,
+      loan: suggestedLoan,
+      leasing: suggestedLeasing,
     }, euEvModel ? 0 : null));
   };
 
   const handleFinancingModeChange = (mode: FinancingMode) => {
+    const leasingAvailability = getLeasingAvailability(car.brand, car.model);
+    if (mode === "leasing" && leasingAvailability.status === "unavailable") return;
+
+    if (mode === "loan") {
+      update({
+        financingMode: mode,
+        loan: buildSuggestedLoanInputs(car.fuelType, car.purchasePrice, car.loan),
+      });
+      return;
+    }
+
+    if (mode === "leasing") {
+      update({
+        financingMode: mode,
+        leasing: buildSuggestedLeasingInputs(car.brand, car.model, car.annualMileage, car.leasing),
+      });
+      return;
+    }
+
     update({ financingMode: mode });
   };
 
@@ -513,12 +730,18 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
     setLookupMessage("");
 
-    update({
+    const nextPartial: Partial<CarInput> = {
       fuelType: ft,
       fuelConsumption: 0,
       fuelPrice: getDefaultFuelPrice(ft),
       estimatedCo2GKm: null,
-    });
+    };
+
+    if (car.financingMode === "loan") {
+      nextPartial.loan = buildSuggestedLoanInputs(ft, car.purchasePrice, car.loan);
+    }
+
+    update(nextPartial);
   };
 
   const currencyUnit = language === "sv" ? "kr" : "SEK";
@@ -536,7 +759,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const fuelPriceHint = car.fuelType === "electric"
     ? t({ en: "Your expected electricity price per kWh.", sv: "Ditt förväntade elpris per kWh." })
     : t({ en: "Your expected fuel price per liter.", sv: "Ditt förväntade bränslepris per liter." });
-  const exactEuEvModel = euEvModels.find((item) => item.model === car.model);
+  const exactEuEvModel = euEvModels.find(
+    (item) => getDisplayModelName(car.brand, item.model) === getDisplayModelName(car.brand, car.model),
+  );
   const availableFuelTypes = useMemo<FuelType[]>(
     () => {
       if (!car.brand || !car.model) return FUEL_TYPE_ORDER;
@@ -571,6 +796,70 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     ? [usingEuEvFallback ? "eu-ev" : "fuel-economy", car.brand, car.model, car.modelYear, lookupModel, lookupOptionId].join("|")
     : "";
   const priceSourceMeta = getPriceSourceMeta(car.priceSource, t);
+  const priceSourceCheckedAtLabel = formatIsoDate(car.priceSourceCheckedAt, locale);
+  const marketSourceLink =
+    car.priceSource === "market_listings" && marketPriceQuery.data?.sourceUrl
+      ? marketPriceQuery.data
+      : null;
+  const directSourceLink =
+    !marketSourceLink && car.priceSourceUrl
+      ? {
+          sourceUrl: car.priceSourceUrl,
+          label: car.priceSourceLabel ?? priceSourceMeta.label,
+          checkedAtLabel: priceSourceCheckedAtLabel,
+        }
+      : null;
+  const leasingAvailability = getLeasingAvailability(car.brand, car.model);
+  const suggestedLeasingDefaults = getSuggestedLeaseDefaults(car.brand, car.model);
+  const loanBenchmarks = getLoanBenchmarks(car.fuelType, car.brand, car.model);
+  const primaryLoanBenchmark = loanBenchmarks.find((item) => item.benchmarkKind !== "policy_rate") ?? null;
+  const loanSelectorHint =
+    primaryLoanBenchmark && primaryLoanBenchmark.rateType === "range"
+      ? t({
+        en: `${primaryLoanBenchmark.providerName} currently publishes ${formatRateLabel(primaryLoanBenchmark)} for car loans.`,
+        sv: `${primaryLoanBenchmark.providerName} publicerar just nu ${formatRateLabel(primaryLoanBenchmark)} för billån.`,
+      })
+      : primaryLoanBenchmark && primaryLoanBenchmark.nominalRatePercent !== undefined
+        ? t({
+          en: `${primaryLoanBenchmark.providerName} benchmark: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType}.`,
+          sv: `${primaryLoanBenchmark.providerName} referens: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : "rörlig"}.`,
+        })
+        : undefined;
+  const leasingSelectorHint =
+    leasingAvailability.status === "available"
+      ? t({
+        en: `${leasingAvailability.providerName} has a verified lease offer for this model.`,
+        sv: `${leasingAvailability.providerName} har ett verifierat leasingerbjudande för modellen.`,
+      })
+      : leasingAvailability.status === "manual_only"
+        ? t({
+          en: `${leasingAvailability.providerName} supports leasing, but this exact model still needs a verified live offer.`,
+          sv: `${leasingAvailability.providerName} erbjuder leasing, men den här exakta modellen saknar ännu ett verifierat live-erbjudande.`,
+        })
+        : leasingAvailability.status === "unavailable"
+          ? t({
+            en: "Leasing is verified as unavailable for this model.",
+            sv: "Leasing är verifierat som otillgängligt för den här modellen.",
+          })
+          : t({
+            en: "No verified leasing source has been added for this model yet.",
+            sv: "Ingen verifierad leasingkälla har lagts till för modellen ännu.",
+          });
+  const selectorStates = {
+    loan: { hint: loanSelectorHint },
+    leasing: {
+      disabled: leasingAvailability.status === "unavailable",
+      hint: leasingSelectorHint,
+    },
+  } satisfies Partial<Record<FinancingMode, { disabled?: boolean; hint?: string }>>;
+  const checkedAtLabel = formatIsoDate(
+    car.financingMode === "leasing" ? leasingAvailability.checkedAt : primaryLoanBenchmark?.checkedAt,
+    locale,
+  );
+  const validUntilLabel = formatIsoDate(
+    car.financingMode === "leasing" ? leasingAvailability.validUntil : primaryLoanBenchmark?.validUntil,
+    locale,
+  );
 
   useEffect(() => {
     setLookupModel("");
@@ -616,8 +905,11 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
     try {
       if (usingEuEvFallback && selectedEuEvVariant) {
-        const shouldUseOfficialPrice = Boolean(selectedEuEvVariant.priceEur) && car.priceSource !== "manual";
-        const nextPurchasePrice = shouldUseOfficialPrice
+        const shouldUseCatalogPrice =
+          Boolean(selectedEuEvVariant.priceEur) &&
+          car.priceSource !== "manual" &&
+          isCurrentGenerationModel;
+        const nextPurchasePrice = shouldUseCatalogPrice
           ? await convertEurToSek(selectedEuEvVariant.priceEur ?? 0)
           : car.purchasePrice;
         const nextLoan =
@@ -629,7 +921,10 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           ...car,
           name: selectedEuEvVariant.title,
           purchasePrice: nextPurchasePrice,
-          priceSource: shouldUseOfficialPrice ? "official_new" : car.priceSource,
+          priceSource: shouldUseCatalogPrice ? "catalog_reference" : car.priceSource,
+          priceSourceLabel: shouldUseCatalogPrice ? "EU EV catalog" : car.priceSourceLabel,
+          priceSourceUrl: shouldUseCatalogPrice ? EU_EV_SOURCE_URL : car.priceSourceUrl,
+          priceSourceCheckedAt: shouldUseCatalogPrice ? undefined : car.priceSourceCheckedAt,
           fuelType: "electric",
           fuelConsumption: selectedEuEvVariant.efficiencyKwh100km,
           estimatedCo2GKm: 0,
@@ -641,11 +936,11 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         setLookupMessage(t({
           en:
             nextPurchasePrice > 0 && selectedEuEvVariant.priceEur
-              ? "EU EV data imported. Tax updated."
+              ? "EU EV data imported. Reference price and tax updated."
               : "EU EV data imported. Enter purchase price manually.",
           sv:
             nextPurchasePrice > 0 && selectedEuEvVariant.priceEur
-              ? "EU EV-data importerad. Skatt uppdaterad."
+              ? "EU EV-data importerad. Referenspris och skatt uppdaterade."
               : "EU EV-data importerad. Ange köpesumma manuellt.",
         }));
         return;
@@ -662,14 +957,17 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         car.priceSource !== "manual" &&
         car.priceSource !== "official_new" &&
         (car.purchasePrice <= 0 || car.priceSource === "missing");
-      const nextCar = applyEstimatedTax({
-        ...car,
-        name: `${car.brand} ${vehicle.model}`,
-        modelYear: vehicle.year || car.modelYear,
-        purchasePrice: shouldRefreshEstimatedPrice ? fallbackPriceEstimate.priceSek : car.purchasePrice,
-        priceSource: shouldRefreshEstimatedPrice ? fallbackPriceEstimate.priceSource : car.priceSource,
-        fuelType: vehicle.fuelType,
-        fuelConsumption: vehicle.fuelConsumption,
+        const nextCar = applyEstimatedTax({
+          ...car,
+          name: `${car.brand} ${vehicle.model}`,
+          modelYear: vehicle.year || car.modelYear,
+          purchasePrice: shouldRefreshEstimatedPrice ? fallbackPriceEstimate.priceSek : car.purchasePrice,
+          priceSource: shouldRefreshEstimatedPrice ? fallbackPriceEstimate.priceSource : car.priceSource,
+          priceSourceLabel: shouldRefreshEstimatedPrice ? undefined : car.priceSourceLabel,
+          priceSourceUrl: shouldRefreshEstimatedPrice ? undefined : car.priceSourceUrl,
+          priceSourceCheckedAt: shouldRefreshEstimatedPrice ? undefined : car.priceSourceCheckedAt,
+          fuelType: vehicle.fuelType,
+          fuelConsumption: vehicle.fuelConsumption,
         estimatedCo2GKm: vehicle.estimatedCo2GKm,
         fuelPrice: getDefaultFuelPrice(vehicle.fuelType),
       }, vehicle.estimatedCo2GKm);
@@ -716,10 +1014,99 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   }, [importOfficialFuelData, isImportingOfficialData, selectedLiveOption, selectedLookupKey]);
 
   useEffect(() => {
-    if (!car.isConfigured || !exactEuEvModel?.averagePriceEur) return;
+    if (!car.isConfigured || !isCurrentGenerationModel) return;
+
+    const verifiedOfficialPrice = findVerifiedOfficialPrice(car.brand, car.model, car.modelYear, currentYear);
+    if (!verifiedOfficialPrice) return;
+    if (car.priceSource === "manual" || car.priceSource === "official_new") {
+      return;
+    }
+
+    const effectKey = [
+      car.brand,
+      car.model,
+      car.modelYear,
+      verifiedOfficialPrice.providerName,
+      verifiedOfficialPrice.matchedModel,
+      verifiedOfficialPrice.priceSek,
+      verifiedOfficialPrice.checkedAt,
+    ].join("|");
+
+    if (lastOfficialPriceKeyRef.current === effectKey && car.purchasePrice === verifiedOfficialPrice.priceSek) {
+      return;
+    }
+
+    lastOfficialPriceKeyRef.current = effectKey;
+
+    onChange({
+      ...car,
+      purchasePrice: verifiedOfficialPrice.priceSek,
+      priceSource: "official_new",
+      priceSourceLabel: verifiedOfficialPrice.providerName,
+      priceSourceUrl: verifiedOfficialPrice.sourceUrl,
+      priceSourceCheckedAt: verifiedOfficialPrice.checkedAt,
+      loan: {
+        ...car.loan,
+        downPayment:
+          car.loan.downPayment > 0 ? car.loan.downPayment : Math.round(verifiedOfficialPrice.priceSek * 0.2),
+      },
+    });
+  }, [car, currentYear, isCurrentGenerationModel, onChange]);
+
+  useEffect(() => {
+    if (!car.isConfigured || !isCurrentGenerationModel) return;
+
+    const verifiedOfficialPrice = findVerifiedOfficialPrice(car.brand, car.model, car.modelYear, currentYear);
+    if (verifiedOfficialPrice) return;
+
+    const verifiedRetailerPrice = findVerifiedRetailerPrice(car.brand, car.model);
+    if (!verifiedRetailerPrice) return;
     if (
       car.priceSource === "manual" ||
       car.priceSource === "official_new" ||
+      car.priceSource === "retailer_listing"
+    ) {
+      return;
+    }
+
+    const effectKey = [
+      car.brand,
+      car.model,
+      car.modelYear,
+      verifiedRetailerPrice.providerName,
+      verifiedRetailerPrice.condition,
+      verifiedRetailerPrice.priceSek,
+      verifiedRetailerPrice.checkedAt,
+    ].join("|");
+
+    if (lastRetailerPriceKeyRef.current === effectKey && car.purchasePrice === verifiedRetailerPrice.priceSek) {
+      return;
+    }
+
+    lastRetailerPriceKeyRef.current = effectKey;
+
+    onChange({
+      ...car,
+      purchasePrice: verifiedRetailerPrice.priceSek,
+      priceSource: "retailer_listing",
+      priceSourceLabel: verifiedRetailerPrice.providerName,
+      priceSourceUrl: verifiedRetailerPrice.sourceUrl,
+      priceSourceCheckedAt: verifiedRetailerPrice.checkedAt,
+      loan: {
+        ...car.loan,
+        downPayment:
+          car.loan.downPayment > 0 ? car.loan.downPayment : Math.round(verifiedRetailerPrice.priceSek * 0.2),
+      },
+    });
+  }, [car, currentYear, isCurrentGenerationModel, onChange]);
+
+  useEffect(() => {
+    if (!car.isConfigured || !exactEuEvModel?.averagePriceEur) return;
+    if (!isCurrentGenerationModel) return;
+    if (
+      car.priceSource === "manual" ||
+      car.priceSource === "official_new" ||
+      car.priceSource === "retailer_listing" ||
       car.priceSource === "market_listings"
     ) {
       return;
@@ -738,7 +1125,10 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         onChange({
           ...car,
           purchasePrice: officialPriceSek,
-          priceSource: "official_new",
+          priceSource: "catalog_reference",
+          priceSourceLabel: "EU EV catalog",
+          priceSourceUrl: EU_EV_SOURCE_URL,
+          priceSourceCheckedAt: undefined,
           loan: {
             ...car.loan,
             downPayment: car.loan.downPayment > 0 ? car.loan.downPayment : Math.round(officialPriceSek * 0.2),
@@ -787,6 +1177,9 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       ...car,
       purchasePrice: marketEstimate.priceSek,
       priceSource: "market_listings",
+      priceSourceLabel: marketEstimate.providerLabel,
+      priceSourceUrl: marketEstimate.sourceUrl,
+      priceSourceCheckedAt: undefined,
       loan: {
         ...car.loan,
         downPayment: car.loan.downPayment > 0 ? car.loan.downPayment : Math.round(marketEstimate.priceSek * 0.2),
@@ -879,7 +1272,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           <div className="space-y-1 min-w-0">
             <Label className="text-[11px] text-muted-foreground font-medium">{t({ en: "Model", sv: "Modell" })}</Label>
             <Select
-              value={car.model || undefined}
+              value={(car.model ? getDisplayModelName(car.brand, car.model) : undefined)}
               onValueChange={handleModelChange}
               disabled={!car.brand}
             >
@@ -986,7 +1379,98 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             <FinancingSelector
               value={car.financingMode}
               onChange={handleFinancingModeChange}
+              optionStates={selectorStates}
             />
+            <div className="mt-2.5 rounded-lg border border-border/60 bg-secondary/25 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              {car.financingMode === "leasing" && leasingAvailability.status === "available" && suggestedLeasingDefaults && (
+                <>
+                  <p>
+                    {t({
+                      en: `Verified lease loaded from ${leasingAvailability.providerName}: from ${suggestedLeasingDefaults.monthlyLeaseCost.toLocaleString(locale)} ${currencyUnit}/mo, ${suggestedLeasingDefaults.leaseDurationMonths} months, ${suggestedLeasingDefaults.includedMileage.toLocaleString(locale)} km/year, ${suggestedLeasingDefaults.downPayment.toLocaleString(locale)} ${currencyUnit} upfront.`,
+                      sv: `Verifierad leasing laddad från ${leasingAvailability.providerName}: från ${suggestedLeasingDefaults.monthlyLeaseCost.toLocaleString(locale)} ${currencyUnit}/mån, ${suggestedLeasingDefaults.leaseDurationMonths} månader, ${suggestedLeasingDefaults.includedMileage.toLocaleString(locale)} km/år och ${suggestedLeasingDefaults.downPayment.toLocaleString(locale)} ${currencyUnit} i första betalning.`,
+                    })}
+                  </p>
+                  {leasingAvailability.notes && (
+                    <p className="mt-1">{leasingAvailability.notes}</p>
+                  )}
+                </>
+              )}
+              {car.financingMode === "leasing" && leasingAvailability.status === "manual_only" && (
+                <>
+                  <p>
+                    {t({
+                      en: "This brand supports private leasing, but we have not stored an active model-specific price yet. Leasing stays editable and you can enter the monthly fee manually.",
+                      sv: "Det här märket erbjuder privatleasing, men vi har ännu inte lagrat ett aktivt modellspecifikt pris. Leasing är fortfarande redigerbart så att du kan ange månadsavgiften manuellt.",
+                    })}
+                  </p>
+                  {leasingAvailability.notes && (
+                    <p className="mt-1">{leasingAvailability.notes}</p>
+                  )}
+                </>
+              )}
+              {car.financingMode === "leasing" && leasingAvailability.status === "unknown" && (
+                <p>
+                  {t({
+                    en: "No verified leasing source has been linked to this exact model yet. You can still compare it by entering the lease terms manually.",
+                    sv: "Ingen verifierad leasingkälla är kopplad till den här exakta modellen ännu. Du kan fortfarande jämföra bilen genom att ange leasingvillkoren manuellt.",
+                  })}
+                </p>
+              )}
+              {car.financingMode === "loan" && (
+                <div className="space-y-1">
+                  {primaryLoanBenchmark && (
+                    <p>
+                      {t({
+                        en: `Default loan benchmark: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "campaign" : primaryLoanBenchmark.rateType}.`,
+                        sv: `Standardreferens för lån: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "range" ? "spann" : "rörlig"}.`,
+                      })}
+                    </p>
+                  )}
+                  {loanBenchmarks.length > 1 && (
+                    <p>
+                      {t({
+                        en: `Also tracked: ${loanBenchmarks.slice(1, 3).map((item) => `${item.providerName} ${formatRateLabel(item)}`).join(" · ")}.`,
+                        sv: `Fler bevakade referenser: ${loanBenchmarks.slice(1, 3).map((item) => `${item.providerName} ${formatRateLabel(item)}`).join(" · ")}.`,
+                      })}
+                    </p>
+                  )}
+                  {primaryLoanBenchmark?.notes && (
+                    <p>{primaryLoanBenchmark.notes}</p>
+                  )}
+                </div>
+              )}
+              {car.financingMode === "cash" && (
+                <p>
+                  {t({
+                    en: `Reference financing rates are still loaded in the background, starting with ${primaryLoanBenchmark?.providerName ?? "official sources"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""}.`,
+                    sv: `Referensräntor för finansiering laddas fortfarande i bakgrunden, med ${primaryLoanBenchmark?.providerName ?? "officiella källor"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""} som första benchmark.`,
+                  })}
+                </p>
+              )}
+              {((car.financingMode === "leasing" && leasingAvailability.sourceUrl) ||
+                (car.financingMode !== "leasing" && primaryLoanBenchmark?.sourceUrl)) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/90">
+                  <a
+                    href={car.financingMode === "leasing" ? leasingAvailability.sourceUrl : primaryLoanBenchmark?.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sky-700 underline underline-offset-2 hover:text-sky-800"
+                  >
+                    {t({ en: "Official source", sv: "Officiell källa" })}
+                  </a>
+                  {checkedAtLabel && (
+                    <span>
+                      {t({ en: `Checked ${checkedAtLabel}`, sv: `Kontrollerad ${checkedAtLabel}` })}
+                    </span>
+                  )}
+                  {validUntilLabel && (
+                    <span>
+                      {t({ en: `Valid until ${validUntilLabel}`, sv: `Gäller till ${validUntilLabel}` })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="h-px bg-border/40 mx-5" />
@@ -1010,9 +1494,45 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     })}
                     required
                   />
-                  <p className={`text-[11px] ${priceSourceMeta.toneClass}`}>
-                    {priceSourceMeta.label}
-                  </p>
+                  <div className="space-y-0.5">
+                    <p className={`text-[11px] ${priceSourceMeta.toneClass}`}>
+                      {priceSourceMeta.label}
+                    </p>
+                    {marketSourceLink && (
+                      <a
+                        href={marketSourceLink.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-sky-700 underline underline-offset-2 hover:text-sky-800"
+                      >
+                        {t({ en: "Filtered results", sv: "Filtrerade resultat" })}: {marketSourceLink.providerLabel}
+                        <span className="text-muted-foreground">
+                          {t({
+                            en: `(${marketSourceLink.sampleSize} matched listings)`,
+                            sv: `(${marketSourceLink.sampleSize} matchade annonser)`,
+                          })}
+                        </span>
+                      </a>
+                    )}
+                    {directSourceLink && (
+                      <a
+                        href={directSourceLink.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-sky-700 underline underline-offset-2 hover:text-sky-800"
+                      >
+                        {t({ en: "Source", sv: "Källa" })}: {directSourceLink.label}
+                        {directSourceLink.checkedAtLabel && (
+                          <span className="text-muted-foreground">
+                            {t({
+                              en: `(checked ${directSourceLink.checkedAtLabel})`,
+                              sv: `(kontrollerad ${directSourceLink.checkedAtLabel})`,
+                            })}
+                          </span>
+                        )}
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1 min-w-0">

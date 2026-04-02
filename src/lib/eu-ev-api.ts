@@ -1,3 +1,6 @@
+export const EU_EV_SOURCE_URL =
+  "https://alternative-fuels-observatory.ec.europa.eu/markets-and-policy/market-and-consumer-insights/available-electric-vehicle-models";
+
 export interface EuEvVariant {
   id: string;
   brand: string;

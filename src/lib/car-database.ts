@@ -75,6 +75,8 @@ const BRAND_PRICE_ANCHORS: Partial<Record<string, Partial<Record<FuelType, numbe
   Suzuki: { petrol: 240000, hybrid: 290000, electric: 360000 },
 };
 
+// Seeded reference prices help us prefill comparisons quickly, but they are not
+// a live official feed from the manufacturer's Swedish pricing pages.
 export const carDatabase: CarBrand[] = [
   {
     brand: "Volvo",
@@ -83,7 +85,7 @@ export const carDatabase: CarBrand[] = [
       { model: "XC40 Recharge", purchasePrice: 480000, fuelType: "electric", fuelConsumption: 18, taxCost: 360, serviceCost: 3200 },
       { model: "XC60 B5", purchasePrice: 520000, fuelType: "petrol", fuelConsumption: 8.1, taxCost: 2200, serviceCost: 6000 },
       { model: "XC90 B5", purchasePrice: 720000, fuelType: "diesel", fuelConsumption: 6.8, taxCost: 2800, serviceCost: 7500 },
-      { model: "EX30", purchasePrice: 370000, fuelType: "electric", fuelConsumption: 16, taxCost: 360, serviceCost: 2800 },
+      { model: "EX30", purchasePrice: 429000, fuelType: "electric", fuelConsumption: 16, taxCost: 360, serviceCost: 2800 },
       { model: "EX90", purchasePrice: 890000, fuelType: "electric", fuelConsumption: 20, taxCost: 360, serviceCost: 4000 },
       { model: "S60 B4", purchasePrice: 410000, fuelType: "petrol", fuelConsumption: 6.9, taxCost: 1700, serviceCost: 5200 },
     ],
@@ -431,7 +433,15 @@ export function getModels(brand: string): CarModel[] {
 
 export function findCarModel(brand: string, model: string): CarModel | undefined {
   const canonicalBrand = canonicalizeDatabaseBrand(brand);
-  return carDatabase.find((b) => b.brand === canonicalBrand)?.models.find((m) => m.model === model);
+  const models = carDatabase.find((b) => b.brand === canonicalBrand)?.models ?? [];
+  const exactMatch = models.find((item) => item.model === model);
+  if (exactMatch) return exactMatch;
+
+  const displayMatch = models
+    .filter((item) => getDisplayModelName(canonicalBrand, item.model) === model)
+    .sort((left, right) => left.purchasePrice - right.purchasePrice)[0];
+
+  return displayMatch;
 }
 
 function normalizeModelKey(value: string): string {
@@ -440,6 +450,76 @@ function normalizeModelKey(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatDisplayToken(value: string): string {
+  return value === value.toLowerCase() ? toTitleCase(value) : value;
+}
+
+export function getDisplayModelName(brand: string, model: string): string {
+  const canonicalBrand = canonicalizeDatabaseBrand(brand);
+  const cleanedModel = model.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = normalizeModelKey(cleanedModel);
+
+  const volvoElectricMatch = cleanedModel.match(/\b(EX\d{2}|EC\d{2}|ES90)\b/i);
+  if (canonicalBrand === "Volvo" && volvoElectricMatch) {
+    const baseModel = volvoElectricMatch[1].toUpperCase();
+    return /\b(twin motor|dual motor)\b/i.test(cleanedModel)
+      ? `${baseModel} Twin Motor`
+      : baseModel;
+  }
+
+  const explicitFamilies: Array<[RegExp, string | ((match: RegExpMatchArray) => string)]> = [
+    [/^(Model\s+[3SXY])\b/i, (match) => `Model ${match[1].split(/\s+/)[1].toUpperCase()}`],
+    [/^(Corolla Cross)\b/i, "Corolla Cross"],
+    [/^(Mustang Mach-E)\b/i, "Mustang Mach-E"],
+    [/^(Explorer EV)\b/i, "Explorer EV"],
+    [/^(Q4 e-tron)\b/i, "Q4 e-tron"],
+    [/^(Q8 e-tron)\b/i, "Q8 e-tron"],
+    [/^(C-HR)\b/i, "C-HR"],
+    [/^(Niro EV)\b/i, "Niro EV"],
+    [/^(Kona Electric)\b/i, "Kona Electric"],
+    [/^(Ioniq 5)\b/i, "Ioniq 5"],
+    [/^(Ioniq 6)\b/i, "Ioniq 6"],
+    [/^(M[eé]gane E-Tech)\b/i, "Mégane E-Tech"],
+    [/^(Scenic E-Tech)\b/i, "Scenic E-Tech"],
+    [/^(MX-30)\b/i, "MX-30"],
+    [/^(Model\s+3)\b/i, "Model 3"],
+    [/^(Model\s+Y)\b/i, "Model Y"],
+    [/^(Model\s+S)\b/i, "Model S"],
+    [/^(Model\s+X)\b/i, "Model X"],
+  ];
+
+  for (const [pattern, replacement] of explicitFamilies) {
+    const match = cleanedModel.match(pattern);
+    if (!match) continue;
+    return typeof replacement === "function" ? replacement(match) : replacement;
+  }
+
+  if (normalized.includes("twinmotor")) {
+    const baseToken = cleanedModel.split(/\s+/)[0];
+    return `${formatDisplayToken(baseToken)} Twin Motor`;
+  }
+
+  const firstTwoTokens = cleanedModel.split(/\s+/).slice(0, 2);
+  if (firstTwoTokens[1]?.toLowerCase() === "cross") {
+    return `${firstTwoTokens[0]} Cross`;
+  }
+
+  const firstToken = cleanedModel.split(/\s+/)[0] ?? cleanedModel;
+  if (/^[a-z]\d/i.test(firstToken)) {
+    return firstToken.toUpperCase();
+  }
+
+  return formatDisplayToken(firstToken);
 }
 
 export function inferFuelTypeFromText(value: string): FuelType | null {
@@ -668,7 +748,7 @@ export function estimatePurchasePrice(
         : applyModelYearAdjustment(exactModel.purchasePrice, modelYear, exactModel.fuelType),
       sampleSize: 1,
       basis: "local_model",
-      priceSource: isCurrentGenerationPrice ? "official_new" : "historical_average",
+      priceSource: isCurrentGenerationPrice ? "catalog_reference" : "historical_average",
     };
   }
 

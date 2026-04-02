@@ -30,7 +30,13 @@ export function shouldPreferMarketPriceEstimate({
   currentYear?: number;
 }): boolean {
   if (!estimate) return false;
-  if (currentPriceSource === "manual" || currentPriceSource === "official_new") return false;
+  if (
+    currentPriceSource === "manual" ||
+    currentPriceSource === "official_new" ||
+    currentPriceSource === "retailer_listing"
+  ) {
+    return false;
+  }
   if (modelYear > currentYear) return false;
 
   const strongEstimate = isStrongMarketPriceEstimate(estimate);
@@ -38,7 +44,9 @@ export function shouldPreferMarketPriceEstimate({
 
   if (currentPriceSource === "market_listings") return true;
   if (currentPriceSource === "missing" || currentPurchasePrice <= 0) return true;
-  if (currentPriceSource === "historical_average" && strongEstimate) return true;
+  if ((currentPriceSource === "historical_average" || currentPriceSource === "catalog_reference") && strongEstimate) {
+    return true;
+  }
 
   return false;
 }

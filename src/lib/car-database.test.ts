@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimatePurchasePrice, getModels } from "./car-database";
+import { estimatePurchasePrice, findCarModel, getDisplayModelName, getModels } from "./car-database";
 
 describe("car-database coverage and pricing", () => {
   it("includes a seeded Dacia catalog beyond the EV-only live fallback", () => {
@@ -11,11 +11,11 @@ describe("car-database coverage and pricing", () => {
     expect(daciaModels.length).toBeGreaterThan(5);
   });
 
-  it("treats exact current-generation seeded prices as official new pricing", () => {
+  it("treats exact current-generation seeded prices as catalog references", () => {
     const currentYear = new Date().getFullYear();
     const estimate = estimatePurchasePrice("Jeep", "Wagoneer S", "electric", currentYear - 1);
 
-    expect(estimate.priceSource).toBe("official_new");
+    expect(estimate.priceSource).toBe("catalog_reference");
     expect(estimate.basis).toBe("local_model");
     expect(estimate.priceSek).toBeGreaterThan(600000);
   });
@@ -24,5 +24,17 @@ describe("car-database coverage and pricing", () => {
     const estimate = estimatePurchasePrice("Jeep", "Wagoneer S", "electric", 2022);
 
     expect(estimate.priceSource).toBe("historical_average");
+  });
+
+  it("collapses long model labels into cleaner display families", () => {
+    expect(getDisplayModelName("Volvo", "EX90 Twin Motor Performance (21 Inch Wheels)")).toBe("EX90 Twin Motor");
+    expect(getDisplayModelName("Volkswagen", "ID.4 PRO 4M EDITION 77kWh 286hk")).toBe("ID.4");
+    expect(getDisplayModelName("Toyota", "Corolla Cross Hybrid")).toBe("Corolla Cross");
+  });
+
+  it("can still resolve a local database model from the simplified dropdown label", () => {
+    const model = findCarModel("Volvo", "XC60");
+
+    expect(model?.model).toBe("XC60 B5");
   });
 });
