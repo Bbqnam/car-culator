@@ -71,8 +71,8 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
           </h3>
           <p className="text-xs text-muted-foreground max-w-[620px]">
             {t({
-              en: "Only official public examples and published offers are shown here. This is not a personalized quote and no number should be invented between source checks.",
-              sv: "Här visas bara officiella publika exempel och publicerade erbjudanden. Detta är inte en personlig offert och inga siffror ska hittas på mellan källkontroller.",
+              en: "This snapshot mixes stored official benchmarks, manually verified offer pages, and dealer or marketplace links already linked in the repo. It is not a personalized quote and no live partner feed is queried here yet.",
+              sv: "Den här vyn blandar lagrade officiella benchmarks, manuellt verifierade erbjudandesidor och handlar- eller marknadslänkar som redan finns länkade i repot. Det är inte en personlig offert och inga live-partnerflöden hämtas här ännu.",
             })}
           </p>
         </div>
@@ -81,7 +81,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             {t({ en: "Real providers", sv: "Riktiga aktörer" })}
           </Badge>
           <Badge variant="secondary" className="text-[10px]">
-            {t({ en: "Official source checked", sv: "Kontrollerad mot officiell källa" })}
+            {t({ en: "Source-backed snapshot", sv: "Källstödd snapshot" })}
           </Badge>
           <Button
             size="sm"
@@ -106,7 +106,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             ({formatCurrency(trialData.bestFinancing.monthlyCost, currency)}{language === "sv" ? "/mån" : "/mo"})
           </p>
           <p className="text-xs text-muted-foreground">
-            {t({ en: "Best dealer:", sv: "Bästa återförsäljare:" })}{" "}
+            {t({ en: "Best retailer source:", sv: "Bästa återförsäljarkälla:" })}{" "}
             {trialData.bestRetailer ? (
               <>
                 <span className="font-semibold text-foreground">
@@ -116,7 +116,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
               </>
             ) : (
               <span className="font-semibold text-foreground">
-                {t({ en: "No matched dealer offer yet", sv: "Inget matchande återförsäljarerbjudande ännu" })}
+                {t({ en: "No matched retailer source yet", sv: "Ingen matchande återförsäljarkälla ännu" })}
               </span>
             )}
           </p>
@@ -131,10 +131,10 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
               <BestRetailerCard offer={trialData.bestRetailer} currency={currency} />
             ) : (
               <EmptyOfferCard
-                title={t({ en: "No matched dealer offer", sv: "Inget matchande återförsäljarerbjudande" })}
+                title={t({ en: "No matched retailer source", sv: "Ingen matchande återförsäljarkälla" })}
                 description={t({
-                  en: "We only show dealer offers tied to the selected car brand. Add a Hyundai dealer source and it will appear here.",
-                  sv: "Vi visar bara återförsäljarerbjudanden som hör till valt bilmärke. Lägg till en Hyundai-källa så visas den här.",
+                  en: "We only show retailer or marketplace sources tied to the selected car brand. Add a verified source and it will appear here.",
+                  sv: "Vi visar bara återförsäljar- eller marknadskällor som hör till valt bilmärke. Lägg till en verifierad källa så visas den här.",
                 })}
               />
             )}
@@ -363,7 +363,7 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
           <ProviderLogo providerId={offer.providerId} name={offer.providerName} />
           <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
-            {t({ en: "Top dealer option", sv: "Bästa återförsäljaralternativ" })}
+            {t({ en: "Top retailer source", sv: "Bästa återförsäljarkälla" })}
           </p>
           <h4 className="text-sm font-semibold text-foreground mt-1">{offer.providerName}</h4>
           <p className="text-[11px] text-muted-foreground">{offer.condition} - {offer.dealerLocation}</p>

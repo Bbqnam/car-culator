@@ -26,6 +26,7 @@ export type OfferType =
   | "retailer_listing";
 
 export type SourceType = "mock" | "partner_feed" | "manual";
+export type RetailerLinkKind = "dealer_direct" | "marketplace_listing" | "marketplace_overview";
 
 export type ApprovalSpeed =
   | "Varierar"
@@ -156,6 +157,7 @@ export interface RetailerOffer {
   providerName: string;
   offerLabel?: string;
   providerType: "retailer" | "marketplace";
+  linkKind: RetailerLinkKind;
   offerType: "retailer_listing";
   monthlyCost: number;
   upfrontCost: number;
@@ -245,6 +247,7 @@ export interface VerifiedRetailerPrice {
   checkedAt: string;
   condition: "Ny" | "Begagnad";
   matchConfidence: "exact" | "family";
+  linkKind: RetailerLinkKind;
 }
 
 const SPEED_SCORE: Record<ApprovalSpeed, number> = {
@@ -589,6 +592,27 @@ function normalizeSearchKey(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function getRetailerLinkKind(source: RetailerListingSource): RetailerLinkKind {
+  if (source.providerType === "marketplace") {
+    return source.offerLabel.toLowerCase().includes("marknadsoversikt")
+      ? "marketplace_overview"
+      : "marketplace_listing";
+  }
+
+  try {
+    const host = new URL(source.ctaUrl).hostname.toLowerCase();
+    if (host.includes("blocket.se") || host.includes("bilweb.se")) {
+      return source.offerLabel.toLowerCase().includes("marknadsoversikt")
+        ? "marketplace_overview"
+        : "marketplace_listing";
+    }
+  } catch {
+    // Keep dealer-direct as the default when the URL cannot be parsed.
+  }
+
+  return "dealer_direct";
+}
+
 function getRetailerModelMatchScore(
   source: { brand: string; model: string; offerLabel: string },
   brand?: string,
@@ -623,6 +647,7 @@ function getRetailerModelMatchScore(
 export function findVerifiedRetailerPrice(brand?: string, model?: string): VerifiedRetailerPrice | null {
   const matches = RETAILER_LISTING_SOURCES
     .filter((source) => source.priceAnchorEligible !== false)
+    .filter((source) => getRetailerLinkKind(source) === "dealer_direct")
     .map((source) => ({
       source,
       score: getRetailerModelMatchScore(source, brand, model),
@@ -655,6 +680,7 @@ export function findVerifiedRetailerPrice(brand?: string, model?: string): Verif
     checkedAt: bestMatch.source.checkedAt,
     condition: bestMatch.source.condition,
     matchConfidence: bestMatch.score >= 1400 ? "exact" : "family",
+    linkKind: getRetailerLinkKind(bestMatch.source),
   };
 }
 
@@ -1033,6 +1059,7 @@ function buildRetailerOffers(
   return RETAILER_LISTING_SOURCES
     .filter((source) => getRetailerModelMatchScore(source, car.brand, car.name) > 0)
     .map((source, index) => {
+      const linkKind = getRetailerLinkKind(source);
       const ownershipEstimate = estimateOwnershipCostForListing(
         source.listingPrice,
         context,
@@ -1044,7 +1071,8 @@ function buildRetailerOffers(
         providerId: slugify(source.providerName),
         providerName: source.providerName,
         offerLabel: source.offerLabel,
-        providerType: source.providerType ?? "retailer",
+        providerType: linkKind === "dealer_direct" ? "retailer" : "marketplace",
+        linkKind,
         offerType: "retailer_listing",
         monthlyCost: ownershipEstimate.monthlyCost,
         upfrontCost: ownershipEstimate.upfrontCost,
@@ -1057,18 +1085,24 @@ function buildRetailerOffers(
         isSponsored: false,
         badge: index === 0 ? (language === "sv" ? "Bäst värde" : "Best value") : undefined,
         ctaLabel:
-          (source.providerType ?? "retailer") === "marketplace"
-            ? l(language, "Open marketplace listing", "Oppna marknadsannons")
-            : l(language, "Open dealer listing", "Oppna annons"),
+          linkKind === "dealer_direct"
+            ? l(language, "Open dealer page", "Oppna handlarens sida")
+            : linkKind === "marketplace_listing"
+              ? l(language, "Open marketplace listing", "Oppna marknadsannons")
+              : l(language, "Open marketplace search", "Oppna marknadssokning"),
         ctaUrl: source.ctaUrl,
         availability: l(
           language,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verified marketplace page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised market price.`
-            : `Official dealer listing checked ${source.checkedAt}. Ownership estimate recalculated from the listing price.`,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verifierad marknadssida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonserat marknadspris.`
-            : `Officiell handlarannons kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`,
+          linkKind === "dealer_direct"
+            ? `Stored dealer page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised listing price.`
+            : linkKind === "marketplace_listing"
+              ? `Stored marketplace listing checked ${source.checkedAt}. This is not a direct dealer checkout page.`
+              : `Stored marketplace search page checked ${source.checkedAt}. This is a search overview, not a direct dealer checkout page.`,
+          linkKind === "dealer_direct"
+            ? `Lagrad handlarsida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`
+            : linkKind === "marketplace_listing"
+              ? `Lagrad marknadsannons kontrollerad ${source.checkedAt}. Detta ar inte en direkt kopsida hos handlaren.`
+              : `Lagrad marknadssokning kontrollerad ${source.checkedAt}. Detta ar en oversiktssida, inte en direkt kopsida hos handlaren.`,
         ),
         sourceType: "manual",
         condition: source.condition,

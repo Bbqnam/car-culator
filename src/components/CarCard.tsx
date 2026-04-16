@@ -941,6 +941,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const priceSourceMeta = getPriceSourceMeta(car.priceSource, t);
   const priceSourceCheckedAtLabel = formatIsoDate(car.priceSourceCheckedAt, locale);
   const marketEstimate = marketPriceQuery.data?.estimate ?? null;
+  const marketDiagnostics = marketPriceQuery.data?.diagnostics;
   const normalizedMarketSourceUrl = toExternalUrl(marketEstimate?.sourceUrl);
   const marketSourceLink =
     car.priceSource === "market_listings" && normalizedMarketSourceUrl && marketEstimate
@@ -1632,8 +1633,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                 <>
                   <p>
                     {t({
-                      en: "This brand supports private leasing, but we have not stored an active model-specific price yet. Leasing stays editable and you can enter the monthly fee manually.",
-                      sv: "Det här märket erbjuder privatleasing, men vi har ännu inte lagrat ett aktivt modellspecifikt pris. Leasing är fortfarande redigerbart så att du kan ange månadsavgiften manuellt.",
+                      en: "This brand supports private leasing, but only a stored brand-level source page is linked right now. Leasing stays editable and you can enter the monthly fee manually.",
+                      sv: "Det här märket erbjuder privatleasing, men just nu finns bara en lagrad källsida på märkesnivå. Leasing är fortfarande redigerbart så att du kan ange månadsavgiften manuellt.",
                     })}
                   </p>
                   {leasingAvailability.notes && (
@@ -1654,8 +1655,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                   {primaryLoanBenchmark && (
                     <p>
                       {t({
-                        en: `Default loan benchmark: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "campaign" : primaryLoanBenchmark.rateType}.`,
-                        sv: `Standardreferens för lån: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "range" ? "spann" : "rörlig"}.`,
+                        en: `Stored loan benchmark: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "campaign" : primaryLoanBenchmark.rateType}.`,
+                        sv: `Lagrad lånebenchmark: ${primaryLoanBenchmark.providerName} ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "range" ? "spann" : "rörlig"}.`,
                       })}
                     </p>
                   )}
@@ -1675,8 +1676,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
               {car.financingMode === "cash" && (
                 <p>
                   {t({
-                    en: `Reference financing rates are still loaded in the background, starting with ${primaryLoanBenchmark?.providerName ?? "official sources"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""}.`,
-                    sv: `Referensräntor för finansiering laddas fortfarande i bakgrunden, med ${primaryLoanBenchmark?.providerName ?? "officiella källor"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""} som första benchmark.`,
+                    en: `Stored financing benchmarks are still loaded in the background, starting with ${primaryLoanBenchmark?.providerName ?? "source-backed references"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""}.`,
+                    sv: `Lagrade finansieringsbenchmarks laddas fortfarande i bakgrunden, med ${primaryLoanBenchmark?.providerName ?? "källstödda referenser"} ${primaryLoanBenchmark ? formatRateLabel(primaryLoanBenchmark) : ""} som första benchmark.`,
                   })}
                 </p>
               )}
@@ -1688,7 +1689,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     rel="noreferrer noopener"
                     className="text-sky-700 underline underline-offset-2 hover:text-sky-800"
                   >
-                    {t({ en: "Official source", sv: "Officiell källa" })}
+                    {t({ en: "Source page", sv: "Källsida" })}
                   </a>
                   {checkedAtLabel && (
                     <span>

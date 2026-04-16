@@ -889,6 +889,7 @@ function CommercialOfferCard({
   const sourceDetails = [offer.availability, offer.notes].filter(Boolean).join(" ");
   const visibleMonthlyCost = displayMonthlyCost ?? offer.monthlyCost;
   const deltaMonthlyCost = comparisonMonthlyCost ?? offer.monthlyCost;
+  const sourceLabel = getCommercialSourceLabel(offer, language);
   const monthlyDelta = deltaMonthlyCost - baseMonthlyCost;
   const monthlyDeltaLabel =
     monthlyDelta < 0
@@ -941,6 +942,9 @@ function CommercialOfferCard({
                   {pill}
                 </span>
               ))}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getMetaPillToneClass(sourceLabel, language)}`}>
+                {sourceLabel}
+              </span>
               {showPrimaryBadge && (
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badgeTone}`}>
                   {primaryBadgeLabel}
@@ -1056,6 +1060,7 @@ function RetailerOfferCard({
   const ctaClasses = isTop
     ? "inline-flex min-h-11 w-full items-center justify-center rounded-md bg-indigo-600 text-white text-xs font-bold px-3 py-2 shadow-sm ring-2 ring-indigo-200 hover:bg-indigo-500 hover:shadow-md transition-all sm:min-h-0 sm:w-auto sm:py-1.5 dark:bg-indigo-500 dark:ring-indigo-300/30 dark:hover:bg-indigo-400"
     : "inline-flex min-h-11 w-full items-center justify-center rounded-md bg-slate-900 text-white text-xs font-bold px-3 py-2 shadow-sm hover:bg-slate-800 hover:shadow-md transition-all sm:min-h-0 sm:w-auto sm:py-1.5 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700";
+  const sourceLabel = getRetailerSourceLabel(offer, language);
   const monthlyDelta = offer.monthlyCost - baseMonthlyCost;
   const monthlyDeltaLabel =
     monthlyDelta < 0
@@ -1097,6 +1102,9 @@ function RetailerOfferCard({
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getMetaPillToneClass(offer.condition, language)}`}>
                 {offer.condition}
               </span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getMetaPillToneClass(sourceLabel, language)}`}>
+                {sourceLabel}
+              </span>
               {showPrimaryBadge && (
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badgeTone}`}>
                   {primaryBadgeLabel}
@@ -1129,7 +1137,7 @@ function RetailerOfferCard({
             {[
               {
                 label: offer.apr > 0 ? "APR" : (language === "sv" ? "Källa" : "Source"),
-                value: offer.apr > 0 ? `${offer.apr.toFixed(1)}% APR` : (language === "sv" ? "Annons" : "Listing"),
+                value: offer.apr > 0 ? `${offer.apr.toFixed(1)}% APR` : sourceLabel,
               },
               { label: tx(language, "Godkännande"), value: offer.approvalSpeed },
             ].map((item) => (
@@ -1555,4 +1563,32 @@ function getDisplayBadgeLabel(badge: string, language: Language): string {
   if (badge === "Låg kontantinsats") return language === "sv" ? "Låg startkostnad" : "Low start cost";
   if (badge === "Low upfront cost") return language === "sv" ? "Låg startkostnad" : "Low start cost";
   return badge;
+}
+
+function getCommercialSourceLabel(offer: CommercialOfferBase, language: Language): string {
+  if (offer.offerType === "bank_loan") {
+    return language === "sv" ? "Källstödd benchmark" : "Source-backed benchmark";
+  }
+
+  if (offer.offerType === "dealer_financing" || offer.offerType === "balloon_financing") {
+    return language === "sv" ? "Lagrad kampanj" : "Stored campaign";
+  }
+
+  if (offer.offerType === "private_leasing") {
+    return language === "sv" ? "Lagrad verifierad offert" : "Stored verified offer";
+  }
+
+  return language === "sv" ? "Lagrad källa" : "Stored source";
+}
+
+function getRetailerSourceLabel(offer: RetailerOffer, language: Language): string {
+  if (offer.linkKind === "dealer_direct") {
+    return language === "sv" ? "Handlarsida" : "Dealer page";
+  }
+
+  if (offer.linkKind === "marketplace_listing") {
+    return language === "sv" ? "Marknadsannons" : "Marketplace listing";
+  }
+
+  return language === "sv" ? "Marknadssokning" : "Marketplace search";
 }

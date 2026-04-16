@@ -27,4 +27,10 @@ describe("commercial trial retailer sources", () => {
       matchConfidence: "exact",
     });
   });
+
+  it("does not treat marketplace-hosted pages as dealer-direct retailer anchors", () => {
+    const price = findVerifiedRetailerPrice("Volkswagen", "ID.4");
+
+    expect(price).toBeNull();
+  });
 });

@@ -22,6 +22,20 @@ describe("shouldPreferMarketPriceEstimate", () => {
     })).toBe(true);
   });
 
+  it("allows a single exact-year live listing to replace a seeded fallback", () => {
+    expect(shouldPreferMarketPriceEstimate({
+      currentPriceSource: "catalog_reference",
+      currentPurchasePrice: 429000,
+      hasLocalModelMatch: true,
+      modelYear: 2025,
+      estimate: {
+        ...strongExactEstimate,
+        sampleSize: 1,
+      },
+      currentYear: 2026,
+    })).toBe(true);
+  });
+
   it("prefers strong market prices over seeded catalog references", () => {
     expect(shouldPreferMarketPriceEstimate({
       currentPriceSource: "catalog_reference",

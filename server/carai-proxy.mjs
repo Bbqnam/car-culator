@@ -339,30 +339,33 @@ function buildBilwebModelKeys(model) {
     .filter(Boolean);
 }
 
-function findBilwebModelFilter(modelOptions, model) {
+function findBilwebModelFilters(modelOptions, model) {
   const modelKeys = buildBilwebModelKeys(model);
-  let bestMatch = null;
-  let bestScore = -1;
+  return modelOptions
+    .map((option) => {
+      let bestScore = -1;
 
-  modelOptions.forEach((option) => {
-    modelKeys.forEach((modelKey) => {
-      if (!modelKey || !option.key) return;
+      modelKeys.forEach((modelKey) => {
+        if (!modelKey || !option.key) return;
 
-      let score = -1;
-      if (option.key === modelKey) {
-        score = 1000 + option.key.length;
-      } else if (modelKey.includes(option.key)) {
-        score = 500 + option.key.length;
-      }
+        if (option.key === modelKey) {
+          bestScore = Math.max(bestScore, 1000 + option.key.length);
+          return;
+        }
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = option;
-      }
-    });
-  });
+        if (modelKey.includes(option.key)) {
+          bestScore = Math.max(bestScore, 500 + option.key.length);
+        }
+      });
 
-  return bestMatch;
+      return {
+        ...option,
+        score: bestScore,
+      };
+    })
+    .filter((option) => option.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3);
 }
 
 function listingMatchesBilwebModel(listing, modelKeys) {
@@ -396,6 +399,131 @@ function averagePrice(listings) {
   return roundToNearestThousand(total / listings.length);
 }
 
+function createMarketPriceDiagnostics(brand, model, year) {
+  return {
+    requested: { brand, model, year },
+    coverage: {
+      bilweb: "queried",
+      blocket: "not_implemented",
+      dealerPages: "not_implemented",
+    },
+    attempts: [],
+  };
+}
+
+function getMarketMatchPriority(matchType) {
+  if (matchType === "exact_year") return 3;
+  if (matchType === "nearby_year") return 2;
+  return 1;
+}
+
+function choosePreferredMarketCandidate(candidates) {
+  if (candidates.length === 0) return null;
+
+  return [...candidates].sort((left, right) => {
+    const matchPriorityDifference = getMarketMatchPriority(right.matchType) - getMarketMatchPriority(left.matchType);
+    if (matchPriorityDifference !== 0) return matchPriorityDifference;
+
+    if (right.sampleSize !== left.sampleSize) {
+      return right.sampleSize - left.sampleSize;
+    }
+
+    return right.priceSek - left.priceSek;
+  })[0];
+}
+
+function buildBilwebBrandYearSearchUrl(brandId, year) {
+  const searchParams = new URLSearchParams({
+    type: "1",
+    brand: String(brandId),
+    year_min: String(year),
+    year_max: String(year),
+    offset: "0",
+    limit: "30",
+    order_by: "timestamp",
+    order: "desc",
+  });
+  return `${BILWEB_SEARCH_BASE_URL}?${searchParams.toString()}`;
+}
+
+function buildBilwebBrandSearchUrl(brandId) {
+  const searchParams = new URLSearchParams({
+    type: "1",
+    brand: String(brandId),
+    offset: "0",
+    limit: "30",
+    order_by: "timestamp",
+    order: "desc",
+  });
+  return `${BILWEB_SEARCH_BASE_URL}?${searchParams.toString()}`;
+}
+
+function evaluateBilwebListings(listings, model, modelKeys, year) {
+  if (listings.length === 0) {
+    return {
+      status: "no_listings",
+      detail: "Bilweb returned no listings for this search.",
+      listingCount: 0,
+    };
+  }
+
+  const exactModelListings = getBilwebListingsForExactModel(listings, model);
+  const matchingListings = exactModelListings.length > 0
+    ? exactModelListings
+    : listings.filter((listing) => listingMatchesBilwebModel(listing, modelKeys));
+
+  if (matchingListings.length === 0) {
+    return {
+      status: "match_failed",
+      detail: "Bilweb listings were fetched, but none matched the requested model.",
+      listingCount: listings.length,
+      matchedCount: 0,
+    };
+  }
+
+  const exactYearListings = matchingListings.filter((listing) => listing.year === year);
+  const nearbyYearListings = matchingListings.filter((listing) => Math.abs(listing.year - year) <= 1);
+  const selectedListings =
+    exactYearListings.length > 0
+      ? exactYearListings
+      : nearbyYearListings.length > 0
+        ? nearbyYearListings
+        : matchingListings;
+  const matchType =
+    exactModelListings.length === 0
+      ? "model_family"
+      : exactYearListings.length > 0
+        ? "exact_year"
+        : nearbyYearListings.length > 0
+          ? "nearby_year"
+          : "model_family";
+  const priceSek = averagePrice(selectedListings);
+
+  if (!priceSek) {
+    return {
+      status: "no_price",
+      detail: "Bilweb returned matched listings, but no usable prices could be parsed.",
+      listingCount: listings.length,
+      matchedCount: matchingListings.length,
+    };
+  }
+
+  return {
+    status: "success",
+    listingCount: listings.length,
+    matchedCount: matchingListings.length,
+    sampleSize: selectedListings.length,
+    matchType,
+    estimate: {
+      priceSek,
+      sampleSize: selectedListings.length,
+      provider: "bilweb",
+      providerLabel: "Bilweb",
+      matchType,
+    },
+  };
+}
+
 function buildBilwebFilteredSearchUrl(brandId, modelId, year) {
   const searchParams = new URLSearchParams({
     type: "1",
@@ -425,64 +553,132 @@ function buildBilwebModelOnlySearchUrl(brandId, modelId) {
 }
 
 async function fetchBilwebMarketPrice(brand, model, year) {
+  const diagnostics = createMarketPriceDiagnostics(brand, model, year);
   const filters = await fetchBilwebBrandFilters(brand);
-  if (!filters) return null;
-
-  const selectedModelFilter = findBilwebModelFilter(filters.modelOptions, model);
-  if (!selectedModelFilter) return null;
-
-  const modelKeys = buildBilwebModelKeys(model);
-  const candidateUrls = [
-    buildBilwebFilteredSearchUrl(filters.brandId, selectedModelFilter.id, year),
-    buildBilwebModelOnlySearchUrl(filters.brandId, selectedModelFilter.id),
-  ];
-
-  for (const url of candidateUrls) {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) continue;
-
-    const html = await response.text();
-    const listings = parseBilwebListings(html);
-    if (listings.length === 0) continue;
-
-    const exactModelListings = getBilwebListingsForExactModel(listings, model);
-    const matchingListings = exactModelListings.length > 0
-      ? exactModelListings
-      : listings.filter((listing) => listingMatchesBilwebModel(listing, modelKeys));
-    if (matchingListings.length === 0) continue;
-
-    const exactYearListings = matchingListings.filter((listing) => listing.year === year);
-    const nearbyYearListings = matchingListings.filter((listing) => Math.abs(listing.year - year) <= 1);
-    const selectedListings =
-      exactYearListings.length > 0
-        ? exactYearListings
-        : nearbyYearListings.length > 0
-          ? nearbyYearListings
-          : matchingListings;
-    const matchType =
-      exactModelListings.length === 0
-        ? "model_family"
-        : exactYearListings.length > 0
-          ? "exact_year"
-          : nearbyYearListings.length > 0
-            ? "nearby_year"
-            : "model_family";
-    const priceSek = averagePrice(selectedListings);
-    if (!priceSek) continue;
-
-    return {
-      priceSek,
-      sampleSize: selectedListings.length,
+  if (!filters) {
+    diagnostics.attempts.push({
       provider: "bilweb",
-      providerLabel: "Bilweb",
-      sourceUrl: url,
-      matchType,
-    };
+      strategy: "brand_filters",
+      status: "filter_missing",
+      detail: "Bilweb brand filters could not be loaded for this make.",
+    });
+    diagnostics.fallbackReason = "no_adapter_match";
+    return { estimate: null, diagnostics };
   }
 
-  return null;
+  const selectedModelFilters = findBilwebModelFilters(filters.modelOptions, model);
+  if (selectedModelFilters.length === 0) {
+    diagnostics.attempts.push({
+      provider: "bilweb",
+      strategy: "model_filters",
+      status: "filter_missing",
+      detail: "Bilweb has no usable model filter match for the requested model.",
+    });
+  }
+
+  const modelKeys = buildBilwebModelKeys(model);
+  const candidateRequests = [
+    ...selectedModelFilters.flatMap((filter) => [
+      {
+        strategy: "filtered_exact_year",
+        url: buildBilwebFilteredSearchUrl(filters.brandId, filter.id, year),
+        detail: `Bilweb filtered search for model option "${filter.label}".`,
+      },
+      {
+        strategy: "filtered_model_only",
+        url: buildBilwebModelOnlySearchUrl(filters.brandId, filter.id),
+        detail: `Bilweb model-only search for model option "${filter.label}".`,
+      },
+    ]),
+    {
+      strategy: "brand_year_search",
+      url: buildBilwebBrandYearSearchUrl(filters.brandId, year),
+      detail: "Bilweb brand-only search filtered to the requested year.",
+    },
+    {
+      strategy: "brand_search",
+      url: buildBilwebBrandSearchUrl(filters.brandId),
+      detail: "Bilweb brand-only search without a model filter.",
+    },
+  ];
+  const seenUrls = new Set();
+  const successfulCandidates = [];
+
+  for (const request of candidateRequests) {
+    if (seenUrls.has(request.url)) continue;
+    seenUrls.add(request.url);
+
+    try {
+      const response = await fetch(request.url, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        diagnostics.attempts.push({
+          provider: "bilweb",
+          strategy: request.strategy,
+          status: "request_failed",
+          url: request.url,
+          detail: `Bilweb returned HTTP ${response.status}.`,
+        });
+        continue;
+      }
+
+      const html = await response.text();
+      const listings = parseBilwebListings(html);
+      const evaluation = evaluateBilwebListings(listings, model, modelKeys, year);
+
+      diagnostics.attempts.push({
+        provider: "bilweb",
+        strategy: request.strategy,
+        status: evaluation.status,
+        url: request.url,
+        detail: evaluation.detail ?? request.detail,
+        listingCount: evaluation.listingCount,
+        matchedCount: evaluation.matchedCount,
+        sampleSize: evaluation.sampleSize,
+        matchType: evaluation.matchType,
+      });
+
+      if (evaluation.status === "success" && evaluation.estimate) {
+        successfulCandidates.push({
+          ...evaluation.estimate,
+          sourceUrl: request.url,
+          strategy: request.strategy,
+        });
+      }
+    } catch (error) {
+      diagnostics.attempts.push({
+        provider: "bilweb",
+        strategy: request.strategy,
+        status: "request_failed",
+        url: request.url,
+        detail: error instanceof Error ? error.message : "Bilweb request failed.",
+      });
+    }
+  }
+
+  const selectedCandidate = choosePreferredMarketCandidate(successfulCandidates);
+  if (!selectedCandidate) {
+    diagnostics.fallbackReason = successfulCandidates.length === 0
+      ? "no_live_match"
+      : "no_usable_price";
+    return { estimate: null, diagnostics };
+  }
+
+  diagnostics.selectedProvider = selectedCandidate.providerLabel;
+  diagnostics.selectedStrategy = selectedCandidate.strategy;
+
+  return {
+    estimate: {
+      priceSek: selectedCandidate.priceSek,
+      sampleSize: selectedCandidate.sampleSize,
+      provider: selectedCandidate.provider,
+      providerLabel: selectedCandidate.providerLabel,
+      sourceUrl: selectedCandidate.sourceUrl,
+      matchType: selectedCandidate.matchType,
+    },
+    diagnostics,
+  };
 }
 
 async function handleMarketPrice(req, res) {
@@ -497,11 +693,25 @@ async function handleMarketPrice(req, res) {
   }
 
   try {
-    const estimate = await fetchBilwebMarketPrice(brand, model, year);
-    sendJson(res, 200, { estimate });
+    const lookup = await fetchBilwebMarketPrice(brand, model, year);
+    console.info(JSON.stringify({
+      event: "market_price_lookup",
+      requested: lookup.diagnostics?.requested,
+      selectedProvider: lookup.diagnostics?.selectedProvider ?? null,
+      selectedStrategy: lookup.diagnostics?.selectedStrategy ?? null,
+      fallbackReason: lookup.diagnostics?.fallbackReason ?? null,
+      estimate: lookup.estimate,
+      attempts: lookup.diagnostics?.attempts ?? [],
+    }));
+    sendJson(res, 200, lookup);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to load Swedish market price listings.";
+    console.error(JSON.stringify({
+      event: "market_price_lookup_failed",
+      requested: { brand, model, year },
+      error: message,
+    }));
     sendJson(res, 502, { error: message });
   }
 }
