@@ -1,4 +1,5 @@
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const PORT = Number(process.env.CARAI_PROXY_PORT ?? process.env.GROK_PROXY_PORT ?? 8787);
 const XAI_API_URL = process.env.XAI_API_URL ?? "https://api.x.ai/v1/chat/completions";
@@ -822,7 +823,7 @@ async function handleChat(req, res) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+export async function handleCarAiRequest(req, res) {
   if (req.method === "OPTIONS") {
     setJsonHeaders(res);
     res.statusCode = 204;
@@ -874,8 +875,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   await handleChat(req, res);
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`CarAI proxy listening on http://localhost:${PORT}`);
-});
+const isDirectExecution =
+  process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if (isDirectExecution) {
+  const server = http.createServer(handleCarAiRequest);
+  server.listen(PORT, () => {
+    console.log(`CarAI proxy listening on http://localhost:${PORT}`);
+  });
+}

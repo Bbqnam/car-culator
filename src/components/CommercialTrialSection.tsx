@@ -10,9 +10,9 @@ import {
 } from "@/lib/commercial-trial";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProviderLogo } from "@/components/provider-logo";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { getProviderVisual } from "@/lib/provider-logos";
 
 interface CommercialTrialSectionProps {
   winner: CarResult;
@@ -26,10 +26,10 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAllOffers, setShowAllOffers] = useState(false);
   const [offerView, setOfferView] = useState<OfferView>("financing");
-  const [sortMode, setSortMode] = useState<SortMode>("best");
+  const [sortMode, setSortMode] = useState<SortMode>("lowest-monthly");
 
   const sortOptions: { key: SortMode; label: string }[] = [
-    { key: "best", label: t({ en: "Best offer first", sv: "Bästa erbjudande först" }) },
+    { key: "best", label: t({ en: "Best overall (balanced)", sv: "Bäst totalt (balanserad)" }) },
     { key: "lowest-monthly", label: t({ en: "Lowest monthly cost", sv: "Lägst månadskostnad" }) },
     { key: "lowest-total", label: t({ en: "Lowest total cost", sv: "Lägst totalkostnad" }) },
     { key: "lowest-upfront", label: t({ en: "Lowest upfront cost", sv: "Lägst kontantinsats" }) },
@@ -67,21 +67,21 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             {t({ en: "Financing & offers", sv: "Finansiering & erbjudanden" })}
           </p>
           <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground">
-            {t({ en: "Commercial trial mode", sv: "Kommersiellt testläge" })}
+            {t({ en: "Market snapshot mode", sv: "Marknadssnapshot" })}
           </h3>
           <p className="text-xs text-muted-foreground max-w-[620px]">
             {t({
-              en: "Curated preview for Swedish loans, leasing, and insurance using official source pages where we have verified data. Dealer and inventory layers are still prototype-level.",
-              sv: "Kurerad vy för svenska lån, leasing och försäkring med officiella källsidor där vi har verifierad data. Återförsäljar- och lagerskiktet är fortfarande på prototypnivå.",
+              en: "Only official public examples and published offers are shown here. This is not a personalized quote and no number should be invented between source checks.",
+              sv: "Här visas bara officiella publika exempel och publicerade erbjudanden. Detta är inte en personlig offert och inga siffror ska hittas på mellan källkontroller.",
             })}
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge className="bg-foreground/90 text-background border-transparent">
-            {t({ en: "Prototype", sv: "Prototyp" })}
+            {t({ en: "Real providers", sv: "Riktiga aktörer" })}
           </Badge>
           <Badge variant="secondary" className="text-[10px]">
-            {t({ en: "Official source seeds", sv: "Officiella källfrön" })}
+            {t({ en: "Official source checked", sv: "Kontrollerad mot officiell källa" })}
           </Badge>
           <Button
             size="sm"
@@ -107,10 +107,18 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
           </p>
           <p className="text-xs text-muted-foreground">
             {t({ en: "Best dealer:", sv: "Bästa återförsäljare:" })}{" "}
-            <span className="font-semibold text-foreground">
-              {trialData.bestRetailer?.providerName ?? t({ en: "No verified listing", sv: "Ingen verifierad annons" })}
-            </span>{" "}
-            {trialData.bestRetailer && `(${trialData.bestRetailer.availability})`}
+            {trialData.bestRetailer ? (
+              <>
+                <span className="font-semibold text-foreground">
+                  {trialData.bestRetailer.providerName}
+                </span>{" "}
+                ({trialData.bestRetailer.availability})
+              </>
+            ) : (
+              <span className="font-semibold text-foreground">
+                {t({ en: "No matched dealer offer yet", sv: "Inget matchande återförsäljarerbjudande ännu" })}
+              </span>
+            )}
           </p>
         </div>
       )}
@@ -122,17 +130,13 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
             {trialData.bestRetailer ? (
               <BestRetailerCard offer={trialData.bestRetailer} currency={currency} />
             ) : (
-              <div className="rounded-xl border border-dashed border-border/70 bg-secondary/20 p-4">
-                <p className="text-sm font-semibold text-foreground">
-                  {t({ en: "Dealer layer disabled until verified feeds are wired", sv: "Återförsäljarlagret är avstängt tills verifierade flöden är inkopplade" })}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                  {t({
-                    en: "Prototype dealer cards used placeholder pricing before. They stay hidden until we can connect verified stock pages or feeds.",
-                    sv: "Prototypens återförsäljarkort använde tidigare platshållarpriser. De hålls dolda tills vi kan koppla verifierade lagersidor eller flöden.",
-                  })}
-                </p>
-              </div>
+              <EmptyOfferCard
+                title={t({ en: "No matched dealer offer", sv: "Inget matchande återförsäljarerbjudande" })}
+                description={t({
+                  en: "We only show dealer offers tied to the selected car brand. Add a Hyundai dealer source and it will appear here.",
+                  sv: "Vi visar bara återförsäljarerbjudanden som hör till valt bilmärke. Lägg till en Hyundai-källa så visas den här.",
+                })}
+              />
             )}
           </div>
 
@@ -227,11 +231,11 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                     currency={currency}
                     renderExtra={(offer) => (
                       <>
-                        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={`${offer.apr.toFixed(1)}% APR`} />
-                        <MiniField label={t({ en: "Term", sv: "Löptid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
+                        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={formatOfferApr(offer.apr, t({ en: "See official source", sv: "Se officiell källa" }))} />
+                        <MiniField label={t({ en: "Term", sv: "Löptid" })} value={formatOfferMonths(offer.durationMonths, t({ en: "months", sv: "månader" }), t({ en: "See official source", sv: "Se officiell källa" }))} />
                         <MiniField
                           label={t({ en: "Residual value / balloon", sv: "Restvärde / restskuld" })}
-                          value={offer.residualValue ? formatCurrency(offer.residualValue, currency) : t({ en: "None", sv: "Ingen" })}
+                          value={offer.residualValue ? formatCurrency(offer.residualValue, currency) : t({ en: "See official source", sv: "Se officiell källa" })}
                         />
                       </>
                     )}
@@ -239,19 +243,30 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 )}
 
                 {offerView === "leasing" && (
-                  <LeasingList offers={sortedLeasing} currency={currency} />
+                  sortedLeasing.length > 0 ? (
+                    <LeasingList offers={sortedLeasing} currency={currency} />
+                  ) : (
+                    <EmptyOfferCard
+                      title={t({ en: "No matched leasing offers", sv: "Inga matchande leasingerbjudanden" })}
+                      description={t({
+                        en: "Only leasing offers for the selected car brand are shown here.",
+                        sv: "Här visas bara leasingerbjudanden för det valda bilmärket.",
+                      })}
+                    />
+                  )
                 )}
 
                 {offerView === "retailer" && (
                   sortedRetailer.length > 0 ? (
                     <RetailerList offers={sortedRetailer} currency={currency} />
                   ) : (
-                    <div className="rounded-lg border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground">
-                      {t({
-                        en: "No verified dealer listings are loaded for this car yet. Placeholder dealer pricing has been removed.",
-                        sv: "Inga verifierade återförsäljarannonser är laddade för bilen ännu. Påhittad återförsäljarprissättning har tagits bort.",
+                    <EmptyOfferCard
+                      title={t({ en: "No matched dealer offers", sv: "Inga matchande återförsäljarerbjudanden" })}
+                      description={t({
+                        en: "Only dealer listings for the selected car brand are shown here.",
+                        sv: "Här visas bara återförsäljarannonser för det valda bilmärket.",
                       })}
-                    </div>
+                    />
                   )
                 )}
               </div>
@@ -308,7 +323,7 @@ function BestFinancingCard({
     <article className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0">
-          <ProviderMark name={offer.providerName} />
+          <ProviderLogo providerId={offer.providerId} name={offer.providerName} />
           <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
             {t({ en: "Top financing match", sv: "Bästa finansieringsmatchning" })}
@@ -321,18 +336,18 @@ function BestFinancingCard({
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-        <MiniField label={t({ en: "Monthly cost", sv: "Månadskostnad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
-        <MiniField label={t({ en: "Upfront payment", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
-        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={`${offer.apr.toFixed(1)}% APR`} />
-        <MiniField label={t({ en: "Contract term", sv: "Avtalstid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
-        <MiniField label={t({ en: "Estimated total cost", sv: "Beräknad totalkostnad" })} value={formatCurrency(offer.totalCost, currency)} />
+        <MiniField label={t({ en: "Monthly cost", sv: "Månadskostnad" })} value={formatOfferMoney(offer.monthlyCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} strong />
+        <MiniField label={t({ en: "Upfront payment", sv: "Kontantinsats" })} value={formatOfferMoney(offer.upfrontCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} />
+        <MiniField label={t({ en: "Rate", sv: "Ränta" })} value={formatOfferApr(offer.apr, t({ en: "See official source", sv: "Se officiell källa" }))} />
+        <MiniField label={t({ en: "Contract term", sv: "Avtalstid" })} value={formatOfferMonths(offer.durationMonths, t({ en: "months", sv: "månader" }), t({ en: "See official source", sv: "Se officiell källa" }))} />
+        <MiniField label={t({ en: "Published total", sv: "Publicerad totalsumma" })} value={formatOfferMoney(offer.totalCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} />
         <MiniField label={t({ en: "Approval speed", sv: "Godkännandetid" })} value={offer.approvalSpeed} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
         <Button size="sm" className="h-8" asChild>
-          <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
+          <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
         </Button>
       </div>
     </article>
@@ -345,7 +360,7 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
     <article className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0">
-          <ProviderMark name={offer.providerName} />
+          <ProviderLogo providerId={offer.providerId} name={offer.providerName} />
           <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
             {t({ en: "Top dealer option", sv: "Bästa återförsäljaralternativ" })}
@@ -358,8 +373,8 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-        <MiniField label={t({ en: "Estimated monthly cost", sv: "Beräknad månadskostnad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
-        <MiniField label={t({ en: "Upfront payment", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
+        <MiniField label={t({ en: "Published financing", sv: "Publicerad finansiering" })} value={formatOfferMoney(offer.monthlyCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} strong />
+        <MiniField label={t({ en: "Cash price", sv: "Kontantpris" })} value={formatOfferMoney(offer.upfrontCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} />
         <MiniField label={t({ en: "Delivery", sv: "Leverans" })} value={offer.deliveryEstimate} />
         <MiniField label={t({ en: "Availability", sv: "Tillgänglighet" })} value={offer.availability} />
         <MiniField label={t({ en: "Warranty", sv: "Garanti" })} value={offer.warrantyInfo} />
@@ -371,7 +386,7 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
           {t({ en: "Test area for dealer leads and referrals", sv: "Testyta för återförsäljarleads och hänvisningar" })}
         </p>
         <Button size="sm" variant="outline" className="h-8" asChild>
-          <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
+          <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
         </Button>
       </div>
     </article>
@@ -400,7 +415,7 @@ function OfferList({
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex items-start gap-2 min-w-0">
-              <ProviderMark name={offer.providerName} small />
+              <ProviderLogo providerId={offer.providerId} name={offer.providerName} small />
               <div>
                 <p className="text-xs font-semibold text-foreground">{offer.providerName}</p>
                 <p className="text-[11px] text-muted-foreground">
@@ -416,9 +431,9 @@ function OfferList({
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <MiniField label={t({ en: "Monthly", sv: "Månad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label={t({ en: "Upfront", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
-            <MiniField label={t({ en: "Total", sv: "Totalt" })} value={formatCurrency(offer.totalCost, currency)} />
+            <MiniField label={t({ en: "Monthly", sv: "Månad" })} value={formatOfferMoney(offer.monthlyCost, currency, t({ en: "See source", sv: "Se källa" }))} strong />
+            <MiniField label={t({ en: "Upfront", sv: "Kontantinsats" })} value={formatOfferMoney(offer.upfrontCost, currency, t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label={t({ en: "Total", sv: "Totalt" })} value={formatOfferMoney(offer.totalCost, currency, t({ en: "See source", sv: "Se källa" }))} />
             <MiniField label={t({ en: "Approval", sv: "Godkännande" })} value={offer.approvalSpeed} />
             {renderExtra?.(offer)}
           </div>
@@ -426,7 +441,7 @@ function OfferList({
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
+              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
@@ -449,7 +464,7 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex items-start gap-2 min-w-0">
-              <ProviderMark name={offer.providerName} small />
+              <ProviderLogo providerId={offer.providerId} name={offer.providerName} small />
               <div>
                 <p className="text-xs font-semibold text-foreground">{offer.providerName}</p>
                 <p className="text-[11px] text-muted-foreground">{t({ en: "Private leasing", sv: "Privatleasing" })}</p>
@@ -459,22 +474,22 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <MiniField label={t({ en: "Monthly fee", sv: "Månadsavgift" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label={t({ en: "Initial payment", sv: "Första betalning" })} value={formatCurrency(offer.initialPayment, currency)} />
-            <MiniField label={t({ en: "Contract", sv: "Avtal" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
-            <MiniField label={t({ en: "Annual mileage", sv: "Årlig körsträcka" })} value={`${offer.annualMileage.toLocaleString("sv-SE")} km`} />
-            <MiniField label={t({ en: "Excess mileage", sv: "Övermil" })} value={`${formatCurrency(offer.excessMileageCost, currency)}/km`} />
+            <MiniField label={t({ en: "Monthly fee", sv: "Månadsavgift" })} value={formatOfferMoney(offer.monthlyCost, currency, t({ en: "See source", sv: "Se källa" }))} strong />
+            <MiniField label={t({ en: "Initial payment", sv: "Första betalning" })} value={formatOfferMoney(offer.initialPayment, currency, t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label={t({ en: "Contract", sv: "Avtal" })} value={formatOfferMonths(offer.durationMonths, t({ en: "months", sv: "månader" }), t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label={t({ en: "Annual mileage", sv: "Årlig körsträcka" })} value={offer.annualMileage > 0 ? `${offer.annualMileage.toLocaleString("sv-SE")} km` : t({ en: "See official source", sv: "Se officiell källa" })} />
+            <MiniField label={t({ en: "Excess mileage", sv: "Övermil" })} value={offer.excessMileageCost > 0 ? `${formatCurrency(offer.excessMileageCost, currency)}/km` : t({ en: "See official source", sv: "Se officiell källa" })} />
             <MiniField label={t({ en: "Included services", sv: "Inkluderade tjänster" })} value={offer.includedServices.join(", ")} />
             <MiniField label={t({ en: "Wear and tear", sv: "Slitage" })} value={offer.wearAndTearNote} />
             <MiniField label={t({ en: "At contract end", sv: "Vid avtalsslut" })} value={offer.endOfContractCondition} />
-            <MiniField label={t({ en: "Estimated total cost", sv: "Beräknad totalkostnad" })} value={formatCurrency(offer.totalCost, currency)} />
+            <MiniField label={t({ en: "Published total", sv: "Publicerad totalsumma" })} value={formatOfferMoney(offer.totalCost, currency, t({ en: "See official source", sv: "Se officiell källa" }))} />
             <MiniField label={t({ en: "Approval", sv: "Godkännande" })} value={offer.approvalSpeed} />
           </div>
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
+              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
@@ -497,7 +512,7 @@ function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency:
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex items-start gap-2 min-w-0">
-              <ProviderMark name={offer.providerName} small />
+              <ProviderLogo providerId={offer.providerId} name={offer.providerName} small />
               <div>
                 <p className="text-xs font-semibold text-foreground">{offer.providerName}</p>
                 <p className="text-[11px] text-muted-foreground">{offer.condition} - {offer.dealerLocation}</p>
@@ -510,11 +525,11 @@ function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency:
             <MiniField label={t({ en: "Delivery", sv: "Leverans" })} value={offer.deliveryEstimate} />
             <MiniField label={t({ en: "Availability", sv: "Tillgänglighet" })} value={offer.availability} />
             <MiniField label={t({ en: "Warranty", sv: "Garanti" })} value={offer.warrantyInfo} />
-            <MiniField label={t({ en: "Monthly", sv: "Månad" })} value={formatCurrency(offer.monthlyCost, currency)} strong />
-            <MiniField label={t({ en: "Upfront", sv: "Kontantinsats" })} value={formatCurrency(offer.upfrontCost, currency)} />
-            <MiniField label={t({ en: "Total", sv: "Totalt" })} value={formatCurrency(offer.totalCost, currency)} />
-            <MiniField label="APR" value={`${offer.apr.toFixed(1)}%`} />
-            <MiniField label={t({ en: "Term", sv: "Löptid" })} value={`${offer.durationMonths} ${t({ en: "months", sv: "månader" })}`} />
+            <MiniField label={t({ en: "Financing example", sv: "Finansieringsexempel" })} value={formatOfferMoney(offer.monthlyCost, currency, t({ en: "See source", sv: "Se källa" }))} strong />
+            <MiniField label={t({ en: "Cash price", sv: "Kontantpris" })} value={formatOfferMoney(offer.upfrontCost, currency, t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label={t({ en: "Listed price", sv: "Listpris" })} value={formatOfferMoney(offer.totalCost, currency, t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label="APR" value={formatOfferApr(offer.apr, t({ en: "See source", sv: "Se källa" }))} />
+            <MiniField label={t({ en: "Term", sv: "Löptid" })} value={formatOfferMonths(offer.durationMonths, t({ en: "months", sv: "månader" }), t({ en: "See source", sv: "Se källa" }))} />
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -522,13 +537,34 @@ function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency:
               {t({ en: "Test area for lead generation and referrals", sv: "Testyta för leadgenerering och hänvisningar" })}
             </p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl}>{offer.ctaLabel}</a>
+              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
       ))}
     </div>
   );
+}
+
+function EmptyOfferCard({ title, description }: { title: string; description: string }) {
+  return (
+    <article className="rounded-xl border border-dashed border-border/70 bg-card/60 p-5 space-y-2">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+    </article>
+  );
+}
+
+function formatOfferMoney(value: number, currency: Currency, fallback: string) {
+  return value > 0 ? formatCurrency(value, currency) : fallback;
+}
+
+function formatOfferApr(value: number, fallback: string) {
+  return value > 0 ? `${value.toFixed(1)}% APR` : fallback;
+}
+
+function formatOfferMonths(value: number, monthLabel: string, fallback: string) {
+  return value > 0 ? `${value} ${monthLabel}` : fallback;
 }
 
 function MiniField({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
@@ -569,32 +605,5 @@ function OfferBadgeGroup({
         </span>
       )}
     </div>
-  );
-}
-
-function ProviderMark({ name, small = false }: { name: string; small?: boolean }) {
-  const visual = getProviderVisual(name);
-  const initials = name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center overflow-hidden border border-border/70 bg-white text-muted-foreground font-semibold dark:border-white/10 dark:bg-slate-900 dark:text-slate-300",
-        small ? "h-6 w-8 rounded-md text-[9px]" : "h-8 w-11 rounded-lg text-[10px]"
-      )}
-      aria-hidden="true"
-    >
-      {visual.logoSrc ? (
-        <img src={visual.logoSrc} alt="" className="max-h-full max-w-full object-contain p-1" />
-      ) : (
-        initials
-      )}
-    </span>
   );
 }
