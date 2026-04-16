@@ -879,6 +879,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
     const localModelKey = normalizeLookupText(car.model);
     const preferredModel =
+      availableModelOptions.find((modelName) => normalizeLookupText(modelName) === localModelKey) ??
       availableModelOptions.find((modelName) => normalizeLookupText(modelName).includes(localModelKey)) ??
       availableModelOptions.find((modelName) => localModelKey.includes(normalizeLookupText(modelName)));
 

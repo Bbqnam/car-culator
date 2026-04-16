@@ -26,14 +26,14 @@ describe("car-database coverage and pricing", () => {
     expect(estimate.priceSource).toBe("historical_average");
   });
 
-  it("collapses long model labels into cleaner display families", () => {
-    expect(getDisplayModelName("Volvo", "EX90 Twin Motor Performance (21 Inch Wheels)")).toBe("EX90 Twin Motor");
-    expect(getDisplayModelName("Volkswagen", "ID.4 PRO 4M EDITION 77kWh 286hk")).toBe("ID.4");
-    expect(getDisplayModelName("Toyota", "Corolla Cross Hybrid")).toBe("Corolla Cross");
+  it("keeps detailed model labels instead of collapsing them into generic families", () => {
+    expect(getDisplayModelName("Volvo", "EX90 Twin Motor Performance (21 Inch Wheels)")).toBe("EX90 Twin Motor Performance (21 Inch Wheels)");
+    expect(getDisplayModelName("Volkswagen", "ID.4 PRO 4M EDITION 77kWh 286hk")).toBe("ID.4 PRO 4M EDITION 77kWh 286hk");
+    expect(getDisplayModelName("Toyota", "Toyota bZ4X AWD Executive")).toBe("bZ4X AWD Executive");
   });
 
-  it("can still resolve a local database model from the simplified dropdown label", () => {
-    const model = findCarModel("Volvo", "XC60");
+  it("resolves a local database model when the detailed model label matches", () => {
+    const model = findCarModel("Volvo", "XC60 B5");
 
     expect(model?.model).toBe("XC60 B5");
   });
