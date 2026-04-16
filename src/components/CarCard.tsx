@@ -44,7 +44,9 @@ import {
   getSuggestedLeaseDefaults,
 } from "@/lib/financing-data";
 import {
-  fetchMarketPriceEstimate,
+  fetchMarketPriceLookup,
+  type MarketPriceDiagnostics,
+  type MarketPriceEstimate,
   shouldPreferMarketPriceEstimate,
 } from "@/lib/market-price-api";
 import { findVerifiedRetailerPrice } from "@/lib/commercial-trial";
@@ -67,6 +69,7 @@ import { FuelBadge } from "@/components/FuelBadge";
 import { FinancingSelector } from "@/components/FinancingSelector";
 import { NumericInput, ReadonlyField } from "@/components/NumericInput";
 import { useI18n } from "@/lib/i18n";
+import { toExternalUrl } from "@/lib/utils";
 
 interface CarCardProps {
   car: CarInput;
@@ -126,42 +129,70 @@ function applyEstimatedTax(car: CarInput, co2Override?: number | null): CarInput
 function getPriceSourceMeta(
   source: PriceSource,
   t: (text: { en: string; sv: string }) => string,
-): { label: string; toneClass: string } {
+): { label: string; toneClass: string; detail: string } {
   switch (source) {
     case "official_new":
       return {
         label: t({ en: "Official manufacturer price", sv: "Officiellt tillverkarpris" }),
         toneClass: "text-emerald-700",
+        detail: t({
+          en: "Stored manufacturer price checked manually against the official source page.",
+          sv: "Lagrad tillverkarpris som kontrollerats manuellt mot officiell källsida.",
+        }),
       };
     case "retailer_listing":
       return {
-        label: t({ en: "Retailer price", sv: "Pris från återförsäljare" }),
+        label: t({ en: "Verified dealer page", sv: "Verifierad handlarsida" }),
         toneClass: "text-indigo-700",
+        detail: t({
+          en: "Stored dealer-direct listing already verified in the repo. Marketplace-hosted listings are excluded here.",
+          sv: "Lagrad direkt handlarsida som redan verifierats i repot. Marknadsplatsannonser exkluderas här.",
+        }),
       };
     case "market_listings":
       return {
-        label: t({ en: "Marketplace price", sv: "Pris från marknadsannonser" }),
+        label: t({ en: "Live marketplace estimate", sv: "Live-estimat från marknadsannonser" }),
         toneClass: "text-sky-700",
+        detail: t({
+          en: "Live estimate from the current Bilweb lookup flow.",
+          sv: "Live-estimat från nuvarande Bilweb-flöde.",
+        }),
       };
     case "catalog_reference":
       return {
-        label: t({ en: "Fallback reference price", sv: "Reservpris från referensdata" }),
+        label: t({ en: "Reference benchmark", sv: "Referensbenchmark" }),
         toneClass: "text-amber-700",
+        detail: t({
+          en: "Static seeded reference data, not a live source lookup.",
+          sv: "Statisk referensdata, inte en live-hämtad källa.",
+        }),
       };
     case "historical_average":
       return {
-        label: t({ en: "Fallback historical / average price", sv: "Reservpris från historik / genomsnitt" }),
+        label: t({ en: "Historical fallback estimate", sv: "Historiskt fallback-estimat" }),
         toneClass: "text-muted-foreground",
+        detail: t({
+          en: "Static local historical estimate based on seeded catalog coverage.",
+          sv: "Statisk lokal historisk uppskattning baserad på seedad katalogtäckning.",
+        }),
       };
     case "manual":
       return {
         label: t({ en: "Manual price", sv: "Manuellt pris" }),
         toneClass: "text-foreground",
+        detail: t({
+          en: "Entered manually in the app.",
+          sv: "Angivet manuellt i appen.",
+        }),
       };
     default:
       return {
         label: t({ en: "No price found yet", sv: "Inget pris hittat ännu" }),
         toneClass: "text-amber-700",
+        detail: t({
+          en: "No usable price source is linked yet.",
+          sv: "Ingen användbar priskälla är länkad ännu.",
+        }),
       };
   }
 }
@@ -219,6 +250,52 @@ function formatIsoDate(
     month: "short",
     day: "numeric",
   }).format(parsed);
+}
+
+function logStructuredClientEvent(event: string, payload: Record<string, unknown>) {
+  console.info(`[carculator:${event}]`, payload);
+}
+
+function describeMarketFallbackReason(
+  diagnostics: MarketPriceDiagnostics | undefined,
+  estimate: MarketPriceEstimate | null | undefined,
+  currentPriceSource: PriceSource,
+  t: (text: { en: string; sv: string }) => string,
+): string | null {
+  if (!diagnostics) return null;
+
+  if (!estimate) {
+    if (diagnostics.fallbackReason === "no_adapter_match") {
+      return t({
+        en: "Live market lookup currently covers Bilweb only. No matching Bilweb adapter/filter path was available for this car.",
+        sv: "Live-marknadsuppslag täcker just nu bara Bilweb. Ingen matchande Bilweb-adapter eller filterväg fanns för bilen.",
+      });
+    }
+
+    return t({
+      en: "No live Bilweb match was usable, so the app kept a stored fallback price. Blocket and direct dealer pages are not queried automatically here yet.",
+      sv: "Ingen live-match från Bilweb var användbar, så appen behöll ett lagrat fallback-pris. Blocket och direkta handlarsidor hämtas ännu inte automatiskt här.",
+    });
+  }
+
+  if (currentPriceSource === "official_new") {
+    return t({
+      en: "A live Bilweb result was found, but a stored manufacturer price still outranks marketplace data.",
+      sv: "Ett live-resultat från Bilweb hittades, men ett lagrat tillverkarpris väger fortfarande tyngre än marknadsdata.",
+    });
+  }
+
+  if (currentPriceSource === "retailer_listing") {
+    return t({
+      en: "A live Bilweb result was found, but a verified dealer-direct page still outranks marketplace data.",
+      sv: "Ett live-resultat från Bilweb hittades, men en verifierad direkt handlarsida väger fortfarande tyngre än marknadsdata.",
+    });
+  }
+
+  return t({
+    en: `A live Bilweb result was found (${estimate.matchType.replace("_", " ")}, ${estimate.sampleSize} listings), but it was not strong enough to replace the current source.`,
+    sv: `Ett live-resultat från Bilweb hittades (${estimate.matchType.replace("_", " ")}, ${estimate.sampleSize} annonser), men det var inte tillräckligt starkt för att ersätta nuvarande källa.`,
+  });
 }
 
 export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemove, onDuplicate }: CarCardProps) {
@@ -362,7 +439,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
   const marketPriceQuery = useQuery({
     queryKey: ["market-price", car.brand, car.model, car.modelYear],
-    queryFn: () => fetchMarketPriceEstimate(car.brand, car.model, car.modelYear),
+    queryFn: () => fetchMarketPriceLookup(car.brand, car.model, car.modelYear),
     enabled: car.isConfigured && Boolean(car.brand) && Boolean(car.model),
     staleTime: 15 * 60 * 1000,
     retry: false,
@@ -643,7 +720,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
     let marketCandidate = null;
     try {
-      const marketEstimate = await fetchMarketPriceEstimate(car.brand, modelName, car.modelYear);
+      const marketLookup = await fetchMarketPriceLookup(car.brand, modelName, car.modelYear);
+      const marketEstimate = marketLookup.estimate;
       const fallbackPriceSource = fallbackCandidate?.priceSource ?? "missing";
       const fallbackPurchasePrice = fallbackCandidate?.priceSek ?? 0;
 
@@ -665,6 +743,16 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           sourceUrl: marketEstimate.sourceUrl,
         };
       }
+
+      logStructuredClientEvent("market_price_lookup", {
+        brand: car.brand,
+        model: modelName,
+        year: car.modelYear,
+        estimate: marketEstimate,
+        diagnostics: marketLookup.diagnostics,
+        fallbackPriceSource,
+        fallbackPurchasePrice,
+      });
     } catch {
       // Keep retailer and fallback prices if marketplace lookup fails.
     }
@@ -704,6 +792,20 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       purchasePrice = 0;
       priceSource = "missing";
     }
+
+    logStructuredClientEvent("price_source_resolution", {
+      brand: car.brand,
+      model: modelName,
+      year: car.modelYear,
+      selectedSource: priceSource,
+      selectedPrice: purchasePrice,
+      candidates: {
+        official: officialCandidate,
+        retailer: retailerCandidate,
+        market: marketCandidate,
+        fallback: fallbackCandidate,
+      },
+    });
 
     const serviceCost = localModel?.serviceCost ?? car.serviceCost;
     const suggestedLoan = buildSuggestedLoanInputs(liveFuelType, purchasePrice, car.loan);
@@ -838,14 +940,20 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     : "";
   const priceSourceMeta = getPriceSourceMeta(car.priceSource, t);
   const priceSourceCheckedAtLabel = formatIsoDate(car.priceSourceCheckedAt, locale);
+  const marketEstimate = marketPriceQuery.data?.estimate ?? null;
+  const normalizedMarketSourceUrl = toExternalUrl(marketEstimate?.sourceUrl);
   const marketSourceLink =
-    car.priceSource === "market_listings" && marketPriceQuery.data?.sourceUrl
-      ? marketPriceQuery.data
-      : null;
-  const directSourceLink =
-    !marketSourceLink && car.priceSourceUrl
+    car.priceSource === "market_listings" && normalizedMarketSourceUrl && marketEstimate
       ? {
-          sourceUrl: car.priceSourceUrl,
+          ...marketEstimate,
+          sourceUrl: normalizedMarketSourceUrl,
+        }
+      : null;
+  const directPriceSourceUrl = toExternalUrl(car.priceSourceUrl);
+  const directSourceLink =
+    !marketSourceLink && directPriceSourceUrl
+      ? {
+          sourceUrl: directPriceSourceUrl,
           label: car.priceSourceLabel ?? priceSourceMeta.label,
           checkedAtLabel: priceSourceCheckedAtLabel,
         }
@@ -854,28 +962,37 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const suggestedLeasingDefaults = getSuggestedLeaseDefaults(car.brand, car.model);
   const loanBenchmarks = getLoanBenchmarks(car.fuelType, car.brand, car.model);
   const primaryLoanBenchmark = loanBenchmarks.find((item) => item.benchmarkKind !== "policy_rate") ?? null;
+  const marketFallbackMessage = describeMarketFallbackReason(
+    marketDiagnostics,
+    marketEstimate,
+    car.priceSource,
+    t,
+  );
+  const financingSourceUrl = toExternalUrl(
+    car.financingMode === "leasing" ? leasingAvailability.sourceUrl : primaryLoanBenchmark?.sourceUrl,
+  );
   const loanSelectorHint =
     primaryLoanBenchmark && primaryLoanBenchmark.rateType === "range"
       ? t({
-        en: `${primaryLoanBenchmark.providerName} currently publishes ${formatRateLabel(primaryLoanBenchmark)} for car loans.`,
-        sv: `${primaryLoanBenchmark.providerName} publicerar just nu ${formatRateLabel(primaryLoanBenchmark)} för billån.`,
+        en: `Stored benchmark from ${primaryLoanBenchmark.providerName}: ${formatRateLabel(primaryLoanBenchmark)} for car loans.`,
+        sv: `Lagrad benchmark från ${primaryLoanBenchmark.providerName}: ${formatRateLabel(primaryLoanBenchmark)} för billån.`,
       })
       : primaryLoanBenchmark && primaryLoanBenchmark.nominalRatePercent !== undefined
         ? t({
-          en: `${primaryLoanBenchmark.providerName} benchmark: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType}.`,
-          sv: `${primaryLoanBenchmark.providerName} referens: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : "rörlig"}.`,
+          en: `${primaryLoanBenchmark.providerName} stored benchmark: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType}.`,
+          sv: `${primaryLoanBenchmark.providerName} lagrade benchmark: ${formatRateLabel(primaryLoanBenchmark)} ${primaryLoanBenchmark.rateType === "fixed" ? "fast" : primaryLoanBenchmark.rateType === "campaign" ? "kampanj" : "rörlig"}.`,
         })
         : undefined;
   const leasingSelectorHint =
     leasingAvailability.status === "available"
       ? t({
-        en: `${leasingAvailability.providerName} has a verified lease offer for this model.`,
-        sv: `${leasingAvailability.providerName} har ett verifierat leasingerbjudande för modellen.`,
+        en: `${leasingAvailability.providerName} has a stored model-specific lease offer from an official source page.`,
+        sv: `${leasingAvailability.providerName} har ett lagrat modellspecifikt leasingerbjudande från en officiell källsida.`,
       })
       : leasingAvailability.status === "manual_only"
         ? t({
-          en: `${leasingAvailability.providerName} supports leasing, but this exact model still needs a verified live offer.`,
-          sv: `${leasingAvailability.providerName} erbjuder leasing, men den här exakta modellen saknar ännu ett verifierat live-erbjudande.`,
+          en: `${leasingAvailability.providerName} supports leasing, but only a stored brand-level source page is available right now.`,
+          sv: `${leasingAvailability.providerName} erbjuder leasing, men just nu finns bara en lagrad källsida på märkesnivå.`,
         })
         : leasingAvailability.status === "unavailable"
           ? t({
@@ -1233,8 +1350,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   }, [car, exactEuEvModel, onChange]);
 
   useEffect(() => {
-    if (!car.isConfigured || !marketPriceQuery.data?.priceSek) return;
-    const marketEstimate = marketPriceQuery.data;
+    if (!car.isConfigured || !marketEstimate?.priceSek) return;
     if (!shouldPreferMarketPriceEstimate({
       currentPriceSource: car.priceSource,
       currentPurchasePrice: car.purchasePrice,
@@ -1277,7 +1393,32 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
         downPayment: car.loan.downPayment > 0 ? car.loan.downPayment : Math.round(marketEstimate.priceSek * 0.2),
       },
     });
-  }, [car, localModelMatch, marketPriceQuery.data, onChange]);
+  }, [car, localModelMatch, marketEstimate, onChange]);
+
+  useEffect(() => {
+    if (!car.isConfigured || !marketDiagnostics) return;
+
+    logStructuredClientEvent("market_price_diagnostics", {
+      brand: car.brand,
+      model: car.model,
+      year: car.modelYear,
+      currentPriceSource: car.priceSource,
+      selectedPrice: car.purchasePrice,
+      estimate: marketEstimate,
+      diagnostics: marketDiagnostics,
+      fallbackMessage: marketFallbackMessage,
+    });
+  }, [
+    car.brand,
+    car.isConfigured,
+    car.model,
+    car.modelYear,
+    car.priceSource,
+    car.purchasePrice,
+    marketDiagnostics,
+    marketEstimate,
+    marketFallbackMessage,
+  ]);
 
   useEffect(() => {
     if (!car.isConfigured || availableFuelTypes.length === 0 || availableFuelTypes.includes(car.fuelType)) return;
@@ -1539,13 +1680,12 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                   })}
                 </p>
               )}
-              {((car.financingMode === "leasing" && leasingAvailability.sourceUrl) ||
-                (car.financingMode !== "leasing" && primaryLoanBenchmark?.sourceUrl)) && (
+              {financingSourceUrl && (
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground/90">
                   <a
-                    href={car.financingMode === "leasing" ? leasingAvailability.sourceUrl : primaryLoanBenchmark?.sourceUrl}
+                    href={financingSourceUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noreferrer noopener"
                     className="text-sky-700 underline underline-offset-2 hover:text-sky-800"
                   >
                     {t({ en: "Official source", sv: "Officiell källa" })}
@@ -1590,11 +1730,14 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                     <p className={`text-[11px] ${priceSourceMeta.toneClass}`}>
                       {priceSourceMeta.label}
                     </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {priceSourceMeta.detail}
+                    </p>
                     {marketSourceLink && (
                       <a
                         href={marketSourceLink.sourceUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noreferrer noopener"
                         className="inline-flex items-center gap-1 text-[11px] text-sky-700 underline underline-offset-2 hover:text-sky-800"
                       >
                         {t({ en: "Filtered results", sv: "Filtrerade resultat" })}: {marketSourceLink.providerLabel}
@@ -1610,10 +1753,10 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                       <a
                         href={directSourceLink.sourceUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noreferrer noopener"
                         className="inline-flex items-center gap-1 text-[11px] text-sky-700 underline underline-offset-2 hover:text-sky-800"
                       >
-                        {t({ en: "Source", sv: "Källa" })}: {directSourceLink.label}
+                        {t({ en: "Source page", sv: "Källsida" })}: {directSourceLink.label}
                         {directSourceLink.checkedAtLabel && (
                           <span className="text-muted-foreground">
                             {t({
@@ -1623,6 +1766,11 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
                           </span>
                         )}
                       </a>
+                    )}
+                    {!marketSourceLink && marketFallbackMessage && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {marketFallbackMessage}
+                      </p>
                     )}
                   </div>
                 </div>

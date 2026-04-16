@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { BrandLogo } from "@/components/BrandLogo";
 import { tx } from "@/components/results/results-panel-copy";
+import { toExternalUrl } from "@/lib/utils";
 
 type OfferTab = "loans" | "leasing" | "retailers" | "insurance";
 type ProviderMeta = {
@@ -823,13 +824,17 @@ function OfferEmptyState({
   href?: string;
   ctaLabel?: string;
 }) {
+  const externalHref = toExternalUrl(href);
+
   return (
     <div className="rounded-xl border border-dashed border-border/70 bg-secondary/20 p-4 dark:border-white/10 dark:bg-slate-900/62 dark:shadow-[0_18px_38px_rgba(0,0,0,0.24)]">
       <p className="text-sm font-semibold text-foreground">{title}</p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
-      {href && ctaLabel && (
+      {externalHref && ctaLabel && (
         <a
-          href={href}
+          href={externalHref}
+          target="_blank"
+          rel="noreferrer noopener"
           className="mt-3 inline-flex min-h-10 items-center justify-center rounded-md border border-border/70 bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-secondary dark:border-white/10 dark:bg-slate-950/75 dark:hover:bg-slate-900"
         >
           {ctaLabel}

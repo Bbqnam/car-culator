@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderLogo } from "@/components/provider-logo";
-import { cn } from "@/lib/utils";
+import { cn, toExternalUrl } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
 interface CommercialTrialSectionProps {
@@ -347,7 +347,7 @@ function BestFinancingCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
         <Button size="sm" className="h-8" asChild>
-          <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
+          <a href={toExternalUrl(offer.ctaUrl)} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
         </Button>
       </div>
     </article>
@@ -386,7 +386,7 @@ function BestRetailerCard({ offer, currency }: { offer: RetailerOffer; currency:
           {t({ en: "Test area for dealer leads and referrals", sv: "Testyta för återförsäljarleads och hänvisningar" })}
         </p>
         <Button size="sm" variant="outline" className="h-8" asChild>
-          <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
+          <a href={toExternalUrl(offer.ctaUrl)} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
         </Button>
       </div>
     </article>
@@ -441,7 +441,7 @@ function OfferList({
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
+              <a href={toExternalUrl(offer.ctaUrl)} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
@@ -489,7 +489,7 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground">{offer.availability}</p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
+              <a href={toExternalUrl(offer.ctaUrl)} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
@@ -537,7 +537,7 @@ function RetailerList({ offers, currency }: { offers: RetailerOffer[]; currency:
               {t({ en: "Test area for lead generation and referrals", sv: "Testyta för leadgenerering och hänvisningar" })}
             </p>
             <Button size="sm" variant={index === 0 ? "default" : "outline"} className="h-8" asChild>
-              <a href={offer.ctaUrl} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
+              <a href={toExternalUrl(offer.ctaUrl)} target="_blank" rel="noreferrer noopener">{offer.ctaLabel}</a>
             </Button>
           </div>
         </article>
