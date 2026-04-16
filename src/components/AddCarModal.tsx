@@ -43,8 +43,8 @@ export function AddCarModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-x-0 border-b-0 bg-background/96 p-0 sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[92vh] sm:w-[90vw] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border dark:border-white/10 dark:bg-slate-950/96">
-        <div className="border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/88">
+      <DialogContent className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-x-0 border-b-0 bg-white p-0 sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[92vh] sm:w-[90vw] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border dark:border-white/10 dark:bg-slate-950/96">
+        <div className="border-b border-border/60 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-950/96">
           <DialogTitle className="text-sm sm:text-base">
             {t({ en: "Configure car", sv: "Konfigurera bil" })}
           </DialogTitle>
@@ -56,8 +56,8 @@ export function AddCarModal({
           </p>
         </div>
 
-        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+        <form className="flex min-h-0 flex-1 flex-col bg-white dark:bg-slate-950/96" onSubmit={handleSubmit}>
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white p-3 sm:p-4 dark:bg-slate-950/96">
             <div className="space-y-2">
               <CarCard
                 car={car}
@@ -80,7 +80,7 @@ export function AddCarModal({
             </div>
           </div>
 
-          <DialogFooter className="border-t border-border/60 bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 dark:border-white/10 dark:bg-slate-950/88">
+          <DialogFooter className="border-t border-border/60 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 dark:border-white/10 dark:bg-slate-950/96">
             <Button
               type="button"
               variant="outline"
