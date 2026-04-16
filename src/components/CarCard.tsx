@@ -373,13 +373,28 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const euEvVariants = euEvVariantsQuery.data ?? EMPTY_EU_EV_VARIANTS;
   const euEvModels = euEvModelsQuery.data ?? EMPTY_EU_EV_MODELS;
   const usingEuEvFallback = liveModels.length === 0 && euEvVariants.length > 0;
-  const lookupModelOptions = usingEuEvFallback ? [car.model] : liveModels;
+  const selectedModelFamily = car.model ? getDisplayModelName(car.brand, car.model) : "";
+  const localVariantOptions = useMemo(
+    () =>
+      selectedModelFamily
+        ? localModels
+            .filter((item) => getDisplayModelName(car.brand, item.model) === selectedModelFamily)
+            .map((item) => ({
+              id: `local:${item.model}`,
+              label: item.model,
+            }))
+        : [],
+    [car.brand, localModels, selectedModelFamily],
+  );
+  const lookupModelOptions = usingEuEvFallback ? [selectedModelFamily || car.model] : liveModels;
   const lookupVariantOptions = usingEuEvFallback
     ? euEvVariants.map((variant) => ({
         id: variant.id,
         label: variant.title,
       }))
-    : liveOptions;
+    : liveOptions.length > 0
+      ? liveOptions
+      : localVariantOptions;
 
   const brands = useMemo(
     () => {
@@ -559,7 +574,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   };
 
   const handleModelChange = async (modelName: string) => {
-    setLookupModel("");
+    setLookupModel(modelName);
     setLookupOptionId("");
     setLookupMessage("");
 
@@ -790,7 +805,13 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
   const residualPercent = calculateResidualPercent(car.ownershipYears, car.fuelType, car.modelYear);
   const loanAmount = Math.max(0, car.purchasePrice - car.loan.downPayment);
-  const selectedLiveOption = lookupVariantOptions.find((option) => option.id === lookupOptionId);
+  const selectedLiveOption =
+    !lookupOptionId.startsWith("local:")
+      ? lookupVariantOptions.find((option) => option.id === lookupOptionId)
+      : undefined;
+  const selectedLocalModel = lookupOptionId.startsWith("local:")
+    ? localModels.find((item) => `local:${item.model}` === lookupOptionId) ?? null
+    : null;
   const selectedEuEvVariant = euEvVariants.find((variant) => variant.id === lookupOptionId);
   const selectedLookupKey = lookupOptionId
     ? [usingEuEvFallback ? "eu-ev" : "fuel-economy", car.brand, car.model, car.modelYear, lookupModel, lookupOptionId].join("|")
@@ -868,12 +889,18 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   }, [car.brand, car.modelYear]);
 
   useEffect(() => {
-    const availableModelOptions = usingEuEvFallback ? [car.model] : liveModels;
+    const availableModelOptions = usingEuEvFallback
+      ? [selectedModelFamily || car.model]
+      : liveModels.length > 0
+        ? liveModels
+        : localVariantOptions.length > 0
+          ? [selectedModelFamily]
+          : [];
 
     if (!car.isConfigured || lookupModel || availableModelOptions.length === 0) return;
 
-    if (usingEuEvFallback) {
-      setLookupModel(car.model);
+    if (usingEuEvFallback || localVariantOptions.length > 0) {
+      setLookupModel(selectedModelFamily || car.model);
       return;
     }
 
@@ -886,7 +913,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     if (preferredModel) {
       setLookupModel(preferredModel);
     }
-  }, [car.isConfigured, car.model, liveModels, lookupModel, usingEuEvFallback]);
+  }, [car.isConfigured, car.model, liveModels, localVariantOptions.length, lookupModel, selectedModelFamily, usingEuEvFallback]);
 
   useEffect(() => {
     setLookupOptionId("");
@@ -899,12 +926,46 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   }, [lookupModel, lookupOptionId, lookupVariantOptions]);
 
   const importOfficialFuelData = useCallback(async () => {
-    if (!lookupOptionId || !selectedLiveOption) return;
+    if (!lookupOptionId) return;
 
     setLookupMessage("");
     setIsImportingOfficialData(true);
 
     try {
+      if (selectedLocalModel) {
+        const priceEstimate = estimatePurchasePrice(
+          car.brand,
+          selectedLocalModel.model,
+          selectedLocalModel.fuelType,
+          car.modelYear,
+        );
+        const purchasePrice = priceEstimate.priceSek;
+
+        onChange(applyEstimatedTax({
+          ...car,
+          model: selectedLocalModel.model,
+          name: `${car.brand} ${selectedLocalModel.model}`,
+          purchasePrice,
+          priceSource: priceEstimate.priceSource,
+          priceSourceLabel: undefined,
+          priceSourceUrl: undefined,
+          priceSourceCheckedAt: undefined,
+          fuelType: selectedLocalModel.fuelType,
+          fuelConsumption: selectedLocalModel.fuelConsumption,
+          fuelPrice: getDefaultFuelPrice(selectedLocalModel.fuelType),
+          serviceCost: selectedLocalModel.serviceCost,
+          loan: buildSuggestedLoanInputs(selectedLocalModel.fuelType, purchasePrice, car.loan),
+          leasing: buildSuggestedLeasingInputs(car.brand, selectedLocalModel.model, car.annualMileage, car.leasing),
+        }));
+        setLookupMessage(t({
+          en: "Version selected from local catalog data.",
+          sv: "Version vald från lokal katalogdata.",
+        }));
+        return;
+      }
+
+      if (!selectedLiveOption) return;
+
       if (usingEuEvFallback && selectedEuEvVariant) {
         const shouldUseCatalogPrice =
           Boolean(selectedEuEvVariant.priceEur) &&
@@ -998,8 +1059,11 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     }
   }, [
     car,
+    buildSuggestedLeasingInputs,
+    buildSuggestedLoanInputs,
     lookupOptionId,
     onChange,
+    selectedLocalModel,
     selectedEuEvVariant,
     selectedLiveOption,
     t,
@@ -1007,12 +1071,12 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   ]);
 
   useEffect(() => {
-    if (!selectedLookupKey || !selectedLiveOption || isImportingOfficialData) return;
+    if (!selectedLookupKey || (!selectedLiveOption && !selectedLocalModel) || isImportingOfficialData) return;
     if (lastAutoImportKeyRef.current === selectedLookupKey) return;
 
     lastAutoImportKeyRef.current = selectedLookupKey;
     void importOfficialFuelData();
-  }, [importOfficialFuelData, isImportingOfficialData, selectedLiveOption, selectedLookupKey]);
+  }, [importOfficialFuelData, isImportingOfficialData, selectedLocalModel, selectedLiveOption, selectedLookupKey]);
 
   useEffect(() => {
     if (!car.isConfigured || !isCurrentGenerationModel) return;

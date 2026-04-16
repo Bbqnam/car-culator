@@ -12,6 +12,45 @@ const BILWEB_FILTER_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const EU_EV_CATALOG_URL =
   "https://alternative-fuels-observatory.ec.europa.eu/markets-and-policy/market-and-consumer-insights/available-electric-vehicle-models";
 const EU_EV_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const EU_MODEL_SUFFIXES = [
+  "allgrip",
+  "standard range",
+  "long range",
+  "launch edition",
+  "first edition",
+  "single motor",
+  "dual motor",
+  "twin motor",
+  "performance",
+  "endurance",
+  "excellence",
+  "premium",
+  "comfort",
+  "luxury",
+  "ultimate",
+  "business",
+  "touring",
+  "tourer",
+  "executive",
+  "quattro",
+  "xdrive",
+  "4motion",
+  "all-wheel drive",
+  "rear-wheel drive",
+  "front-wheel drive",
+  "awd",
+  "rwd",
+  "fwd",
+  "4wd",
+  "4x4",
+  "gtx",
+  "gt",
+  "vz",
+  "pro",
+  "plus",
+  "max",
+  "pure",
+];
 const EU_MULTI_WORD_BRANDS = [
   "Alfa Romeo",
   "Aston Martin",
@@ -504,7 +543,7 @@ function parseEuEvVariantsFromHtml(html) {
     .filter(Boolean);
 }
 
-function deriveEuDisplayModel(brand, title) {
+function deriveEuBaseModel(brand, title) {
   let model = String(title || "").trim();
   const normalizedBrand = normalizeLookupText(brand);
   const normalizedTitle = normalizeLookupText(model);
@@ -513,7 +552,25 @@ function deriveEuDisplayModel(brand, title) {
     model = model.slice(String(brand).length).trim();
   }
 
-  return model.replace(/\s+/g, " ").trim() || String(title || "").trim();
+  model = model.replace(/\s+-\s+.*$/, "").trim();
+  model = model.replace(/\s+\d+(?:[.,]\d+)?\s*kW$/i, "").trim();
+  model = model.replace(/\s+\d+(?:[.,]\d+)?\s*kWh$/i, "").trim();
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const suffix of EU_MODEL_SUFFIXES) {
+      const suffixPattern = new RegExp(`\\s+${suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      if (suffixPattern.test(model)) {
+        model = model.replace(suffixPattern, "").trim();
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return model || String(title || "").trim();
 }
 
 async function loadEuEvCatalog() {
@@ -587,11 +644,11 @@ function listEuEvModels(variants, brand, year) {
     const brandMatches = normalizeLookupText(variant.brand) === normalizedBrand;
     if (!yearMatches || !brandMatches) return;
 
-    const displayModel = deriveEuDisplayModel(variant.brand, variant.title);
-    if (!displayModel) return;
+    const baseModel = deriveEuBaseModel(variant.brand, variant.title);
+    if (!baseModel) return;
 
-    const existing = grouped.get(displayModel) ?? {
-      model: displayModel,
+    const existing = grouped.get(baseModel) ?? {
+      model: baseModel,
       fuelType: "electric",
       variantCount: 0,
       averageEfficiencyKwh100km: 0,
@@ -605,7 +662,7 @@ function listEuEvModels(variants, brand, year) {
       existing.pricedVariantCount += 1;
       existing.averagePriceEur += variant.priceEur;
     }
-    grouped.set(displayModel, existing);
+    grouped.set(baseModel, existing);
   });
 
   return [...grouped.values()]
