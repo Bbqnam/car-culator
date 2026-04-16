@@ -17,4 +17,14 @@ describe("commercial trial retailer sources", () => {
       priceSek: 549900,
     });
   });
+
+  it("prefers an exact trim listing over a broader family match", () => {
+    const price = findVerifiedRetailerPrice("Volvo", "EX30 Twin Motor Performance Ultra");
+
+    expect(price).toMatchObject({
+      providerName: "Rejmes",
+      offerLabel: "EX30 Twin Motor Performance Ultra",
+      matchConfidence: "exact",
+    });
+  });
 });

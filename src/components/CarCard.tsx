@@ -373,20 +373,20 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const euEvVariants = euEvVariantsQuery.data ?? EMPTY_EU_EV_VARIANTS;
   const euEvModels = euEvModelsQuery.data ?? EMPTY_EU_EV_MODELS;
   const usingEuEvFallback = liveModels.length === 0 && euEvVariants.length > 0;
-  const selectedModelFamily = car.model ? getDisplayModelName(car.brand, car.model) : "";
+  const selectedModelName = car.model ? getDisplayModelName(car.brand, car.model) : "";
   const localVariantOptions = useMemo(
     () =>
-      selectedModelFamily
+      selectedModelName
         ? localModels
-            .filter((item) => getDisplayModelName(car.brand, item.model) === selectedModelFamily)
+            .filter((item) => getDisplayModelName(car.brand, item.model) === selectedModelName)
             .map((item) => ({
               id: `local:${item.model}`,
               label: item.model,
             }))
         : [],
-    [car.brand, localModels, selectedModelFamily],
+    [car.brand, localModels, selectedModelName],
   );
-  const lookupModelOptions = usingEuEvFallback ? [selectedModelFamily || car.model] : liveModels;
+  const lookupModelOptions = usingEuEvFallback ? [selectedModelName || car.model] : liveModels;
   const lookupVariantOptions = usingEuEvFallback
     ? euEvVariants.map((variant) => ({
         id: variant.id,
@@ -609,6 +609,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           sourceLabel: officialPrice.providerName,
           sourceUrl: officialPrice.sourceUrl,
           sourceCheckedAt: officialPrice.checkedAt,
+          matchConfidence: officialPrice.matchConfidence,
         }
       : null;
     const retailerListing = isCurrentGenerationModel ? findVerifiedRetailerPrice(car.brand, modelName) : null;
@@ -619,6 +620,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           sourceLabel: retailerListing.providerName,
           sourceUrl: retailerListing.sourceUrl,
           sourceCheckedAt: retailerListing.checkedAt,
+          matchConfidence: retailerListing.matchConfidence,
         }
       : null;
     let fallbackCandidate = toAutomaticPriceCandidate(priceEstimate.priceSek, priceEstimate.priceSource);
@@ -667,12 +669,30 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       // Keep retailer and fallback prices if marketplace lookup fails.
     }
 
-    const selectedPriceCandidate = choosePreferredPriceCandidate([
+    const prioritizedCandidates = [
       officialCandidate,
       retailerCandidate,
       marketCandidate,
       fallbackCandidate,
-    ]);
+    ];
+    const selectedPriceCandidate =
+      officialCandidate?.matchConfidence === "family" &&
+      retailerCandidate?.matchConfidence === "exact"
+        ? choosePreferredPriceCandidate([
+            retailerCandidate,
+            officialCandidate
+              ? {
+                  priceSek: officialCandidate.priceSek,
+                  priceSource: "catalog_reference" as const,
+                  sourceLabel: officialCandidate.sourceLabel,
+                  sourceUrl: officialCandidate.sourceUrl,
+                  sourceCheckedAt: officialCandidate.sourceCheckedAt,
+                }
+              : null,
+            marketCandidate,
+            fallbackCandidate,
+          ])
+        : choosePreferredPriceCandidate(prioritizedCandidates);
 
     if (selectedPriceCandidate) {
       purchasePrice = selectedPriceCandidate.priceSek;
@@ -890,17 +910,17 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
   useEffect(() => {
     const availableModelOptions = usingEuEvFallback
-      ? [selectedModelFamily || car.model]
+      ? [selectedModelName || car.model]
       : liveModels.length > 0
         ? liveModels
         : localVariantOptions.length > 0
-          ? [selectedModelFamily]
+          ? [selectedModelName]
           : [];
 
     if (!car.isConfigured || lookupModel || availableModelOptions.length === 0) return;
 
     if (usingEuEvFallback || localVariantOptions.length > 0) {
-      setLookupModel(selectedModelFamily || car.model);
+      setLookupModel(selectedModelName || car.model);
       return;
     }
 
@@ -913,7 +933,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     if (preferredModel) {
       setLookupModel(preferredModel);
     }
-  }, [car.isConfigured, car.model, liveModels, localVariantOptions.length, lookupModel, selectedModelFamily, usingEuEvFallback]);
+  }, [car.isConfigured, car.model, liveModels, localVariantOptions.length, lookupModel, selectedModelName, usingEuEvFallback]);
 
   useEffect(() => {
     setLookupOptionId("");
@@ -1083,6 +1103,13 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
     const verifiedOfficialPrice = findVerifiedOfficialPrice(car.brand, car.model, car.modelYear, currentYear);
     if (!verifiedOfficialPrice) return;
+    const verifiedRetailerPrice = findVerifiedRetailerPrice(car.brand, car.model);
+    if (
+      verifiedOfficialPrice.matchConfidence === "family" &&
+      verifiedRetailerPrice?.matchConfidence === "exact"
+    ) {
+      return;
+    }
     if (car.priceSource === "manual" || car.priceSource === "official_new") {
       return;
     }
@@ -1122,7 +1149,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
     if (!car.isConfigured || !isCurrentGenerationModel) return;
 
     const verifiedOfficialPrice = findVerifiedOfficialPrice(car.brand, car.model, car.modelYear, currentYear);
-    if (verifiedOfficialPrice) return;
+    if (verifiedOfficialPrice?.matchConfidence === "exact") return;
 
     const verifiedRetailerPrice = findVerifiedRetailerPrice(car.brand, car.model);
     if (!verifiedRetailerPrice) return;

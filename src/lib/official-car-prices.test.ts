@@ -8,6 +8,7 @@ describe("official car prices", () => {
     expect(price).toMatchObject({
       priceSek: 529900,
       providerName: "Volvo Cars Sverige",
+      matchConfidence: "exact",
     });
   });
 
@@ -17,6 +18,7 @@ describe("official car prices", () => {
     expect(price).toMatchObject({
       priceSek: 542000,
       matchedModel: "EX30 Cross Country",
+      matchConfidence: "exact",
     });
   });
 
@@ -26,6 +28,17 @@ describe("official car prices", () => {
     expect(price).toMatchObject({
       priceSek: 479900,
       matchedModel: "bZ4X",
+      matchConfidence: "exact",
+    });
+  });
+
+  it("downgrades broader family matches for more detailed trims", () => {
+    const price = findVerifiedOfficialPrice("Volvo", "EX30 Twin Motor Performance Ultra", 2026, 2026);
+
+    expect(price).toMatchObject({
+      priceSek: 429000,
+      matchedModel: "EX30",
+      matchConfidence: "family",
     });
   });
 

@@ -437,11 +437,7 @@ export function findCarModel(brand: string, model: string): CarModel | undefined
   const exactMatch = models.find((item) => item.model === model);
   if (exactMatch) return exactMatch;
 
-  const displayMatch = models
-    .filter((item) => getDisplayModelName(canonicalBrand, item.model) === model)
-    .sort((left, right) => left.purchasePrice - right.purchasePrice)[0];
-
-  return displayMatch;
+  return models.find((item) => getDisplayModelName(canonicalBrand, item.model) === model);
 }
 
 function normalizeModelKey(value: string): string {
@@ -452,74 +448,20 @@ function normalizeModelKey(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function toTitleCase(value: string): string {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function formatDisplayToken(value: string): string {
-  return value === value.toLowerCase() ? toTitleCase(value) : value;
-}
-
 export function getDisplayModelName(brand: string, model: string): string {
   const canonicalBrand = canonicalizeDatabaseBrand(brand);
   const cleanedModel = model.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
-  const normalized = normalizeModelKey(cleanedModel);
+  const normalizedBrand = normalizeModelKey(canonicalBrand);
+  const normalizedModel = normalizeModelKey(cleanedModel);
 
-  const volvoElectricMatch = cleanedModel.match(/\b(EX\d{2}|EC\d{2}|ES90)\b/i);
-  if (canonicalBrand === "Volvo" && volvoElectricMatch) {
-    const baseModel = volvoElectricMatch[1].toUpperCase();
-    return /\b(twin motor|dual motor)\b/i.test(cleanedModel)
-      ? `${baseModel} Twin Motor`
-      : baseModel;
+  if (normalizedBrand && normalizedModel.startsWith(normalizedBrand)) {
+    const withoutBrand = cleanedModel.slice(canonicalBrand.length).trim();
+    if (withoutBrand) {
+      return withoutBrand;
+    }
   }
 
-  const explicitFamilies: Array<[RegExp, string | ((match: RegExpMatchArray) => string)]> = [
-    [/^(Model\s+[3SXY])\b/i, (match) => `Model ${match[1].split(/\s+/)[1].toUpperCase()}`],
-    [/^(Corolla Cross)\b/i, "Corolla Cross"],
-    [/^(Mustang Mach-E)\b/i, "Mustang Mach-E"],
-    [/^(Explorer EV)\b/i, "Explorer EV"],
-    [/^(Q4 e-tron)\b/i, "Q4 e-tron"],
-    [/^(Q8 e-tron)\b/i, "Q8 e-tron"],
-    [/^(C-HR)\b/i, "C-HR"],
-    [/^(Niro EV)\b/i, "Niro EV"],
-    [/^(Kona Electric)\b/i, "Kona Electric"],
-    [/^(Ioniq 5)\b/i, "Ioniq 5"],
-    [/^(Ioniq 6)\b/i, "Ioniq 6"],
-    [/^(M[eé]gane E-Tech)\b/i, "Mégane E-Tech"],
-    [/^(Scenic E-Tech)\b/i, "Scenic E-Tech"],
-    [/^(MX-30)\b/i, "MX-30"],
-    [/^(Model\s+3)\b/i, "Model 3"],
-    [/^(Model\s+Y)\b/i, "Model Y"],
-    [/^(Model\s+S)\b/i, "Model S"],
-    [/^(Model\s+X)\b/i, "Model X"],
-  ];
-
-  for (const [pattern, replacement] of explicitFamilies) {
-    const match = cleanedModel.match(pattern);
-    if (!match) continue;
-    return typeof replacement === "function" ? replacement(match) : replacement;
-  }
-
-  if (normalized.includes("twinmotor")) {
-    const baseToken = cleanedModel.split(/\s+/)[0];
-    return `${formatDisplayToken(baseToken)} Twin Motor`;
-  }
-
-  const firstTwoTokens = cleanedModel.split(/\s+/).slice(0, 2);
-  if (firstTwoTokens[1]?.toLowerCase() === "cross") {
-    return `${firstTwoTokens[0]} Cross`;
-  }
-
-  const firstToken = cleanedModel.split(/\s+/)[0] ?? cleanedModel;
-  if (/^[a-z]\d/i.test(firstToken)) {
-    return firstToken.toUpperCase();
-  }
-
-  return formatDisplayToken(firstToken);
+  return cleanedModel;
 }
 
 export function inferFuelTypeFromText(value: string): FuelType | null {

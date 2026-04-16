@@ -244,6 +244,7 @@ export interface VerifiedRetailerPrice {
   sourceUrl: string;
   checkedAt: string;
   condition: "Ny" | "Begagnad";
+  matchConfidence: "exact" | "family";
 }
 
 const SPEED_SCORE: Record<ApprovalSpeed, number> = {
@@ -588,46 +589,72 @@ function normalizeSearchKey(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function matchesSourceModel(source: { brand: string; model: string }, brand?: string, model?: string): boolean {
-  if (!brand || !model) return false;
-  if (normalizeSearchKey(source.brand) !== normalizeSearchKey(brand)) return false;
+function getRetailerModelMatchScore(
+  source: { brand: string; model: string; offerLabel: string },
+  brand?: string,
+  model?: string,
+): number {
+  if (!brand || !model) return 0;
+  if (normalizeSearchKey(source.brand) !== normalizeSearchKey(brand)) return 0;
 
-  const sourceModel = normalizeSearchKey(source.model);
   const selectedModel = normalizeSearchKey(model);
+  const modelCandidates = [source.offerLabel, source.model];
 
-  return (
-    sourceModel === selectedModel ||
-    selectedModel.includes(sourceModel) ||
-    sourceModel.includes(selectedModel)
-  );
+  return modelCandidates.reduce((bestScore, candidate) => {
+    const normalizedCandidate = normalizeSearchKey(candidate);
+    if (!normalizedCandidate) return bestScore;
+
+    if (normalizedCandidate === selectedModel) {
+      return Math.max(bestScore, 1400 + normalizedCandidate.length);
+    }
+
+    if (normalizedCandidate.includes(selectedModel)) {
+      return Math.max(bestScore, 900 + selectedModel.length);
+    }
+
+    if (selectedModel.includes(normalizedCandidate)) {
+      return Math.max(bestScore, candidate === source.offerLabel ? 700 + normalizedCandidate.length : 500 + normalizedCandidate.length);
+    }
+
+    return bestScore;
+  }, 0);
 }
 
 export function findVerifiedRetailerPrice(brand?: string, model?: string): VerifiedRetailerPrice | null {
   const matches = RETAILER_LISTING_SOURCES
     .filter((source) => source.priceAnchorEligible !== false)
-    .filter((source) => matchesSourceModel(source, brand, model))
+    .map((source) => ({
+      source,
+      score: getRetailerModelMatchScore(source, brand, model),
+    }))
+    .filter((entry) => entry.score > 0)
     .sort((left, right) => {
-      const conditionDifference =
-        (left.condition === "Ny" ? 0 : 1) - (right.condition === "Ny" ? 0 : 1);
-      if (conditionDifference !== 0) return conditionDifference;
-
-      if (left.checkedAt !== right.checkedAt) {
-        return right.checkedAt.localeCompare(left.checkedAt);
+      if (right.score !== left.score) {
+        return right.score - left.score;
       }
 
-      return left.listingPrice - right.listingPrice;
+      const conditionDifference =
+        (left.source.condition === "Ny" ? 0 : 1) - (right.source.condition === "Ny" ? 0 : 1);
+      if (conditionDifference !== 0) return conditionDifference;
+
+      if (left.source.checkedAt !== right.source.checkedAt) {
+        return right.source.checkedAt.localeCompare(left.source.checkedAt);
+      }
+
+      return left.source.listingPrice - right.source.listingPrice;
     });
 
   const bestMatch = matches[0];
   if (!bestMatch) return null;
 
   return {
-    priceSek: bestMatch.listingPrice,
-    providerName: bestMatch.providerName,
-    offerLabel: bestMatch.offerLabel,
-    sourceUrl: bestMatch.ctaUrl,
-    checkedAt: bestMatch.checkedAt,
-    condition: bestMatch.condition,
+    priceSek: bestMatch.source.listingPrice,
+    providerName: bestMatch.source.providerName,
+    offerLabel: bestMatch.source.offerLabel,
+    sourceUrl: bestMatch.source.ctaUrl,
+    checkedAt: bestMatch.source.checkedAt,
+    condition: bestMatch.source.condition,
+    matchConfidence: bestMatch.score >= 1400 ? "exact" : "family",
   };
 }
 
@@ -1004,7 +1031,7 @@ function buildRetailerOffers(
   const referenceRatePercent = referenceBenchmark ? getRepresentativeNominalRate(referenceBenchmark) : 0;
 
   return RETAILER_LISTING_SOURCES
-    .filter((source) => matchesSourceModel(source, car.brand, car.name))
+    .filter((source) => getRetailerModelMatchScore(source, car.brand, car.name) > 0)
     .map((source, index) => {
       const ownershipEstimate = estimateOwnershipCostForListing(
         source.listingPrice,

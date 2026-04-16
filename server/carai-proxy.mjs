@@ -379,6 +379,13 @@ function listingMatchesBilwebModel(listing, modelKeys) {
   });
 }
 
+function getBilwebListingsForExactModel(listings, model) {
+  const exactModelKey = normalizeLookupText(model);
+  if (!exactModelKey) return [];
+
+  return listings.filter((listing) => listingMatchesBilwebModel(listing, [exactModelKey]));
+}
+
 function roundToNearestThousand(value) {
   return Math.round(value / 1000) * 1000;
 }
@@ -440,7 +447,10 @@ async function fetchBilwebMarketPrice(brand, model, year) {
     const listings = parseBilwebListings(html);
     if (listings.length === 0) continue;
 
-    const matchingListings = listings.filter((listing) => listingMatchesBilwebModel(listing, modelKeys));
+    const exactModelListings = getBilwebListingsForExactModel(listings, model);
+    const matchingListings = exactModelListings.length > 0
+      ? exactModelListings
+      : listings.filter((listing) => listingMatchesBilwebModel(listing, modelKeys));
     if (matchingListings.length === 0) continue;
 
     const exactYearListings = matchingListings.filter((listing) => listing.year === year);
@@ -452,11 +462,13 @@ async function fetchBilwebMarketPrice(brand, model, year) {
           ? nearbyYearListings
           : matchingListings;
     const matchType =
-      exactYearListings.length > 0
-        ? "exact_year"
-        : nearbyYearListings.length > 0
-          ? "nearby_year"
-          : "model_family";
+      exactModelListings.length === 0
+        ? "model_family"
+        : exactYearListings.length > 0
+          ? "exact_year"
+          : nearbyYearListings.length > 0
+            ? "nearby_year"
+            : "model_family";
     const priceSek = averagePrice(selectedListings);
     if (!priceSek) continue;
 
@@ -552,25 +564,7 @@ function deriveEuBaseModel(brand, title) {
     model = model.slice(String(brand).length).trim();
   }
 
-  model = model.replace(/\s+-\s+.*$/, "").trim();
-  model = model.replace(/\s+\d+(?:[.,]\d+)?\s*kW$/i, "").trim();
-  model = model.replace(/\s+\d+(?:[.,]\d+)?\s*kWh$/i, "").trim();
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-
-    for (const suffix of EU_MODEL_SUFFIXES) {
-      const suffixPattern = new RegExp(`\\s+${suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      if (suffixPattern.test(model)) {
-        model = model.replace(suffixPattern, "").trim();
-        changed = true;
-        break;
-      }
-    }
-  }
-
-  return model || String(title || "").trim();
+  return model.replace(/\s+/g, " ").trim() || String(title || "").trim();
 }
 
 async function loadEuEvCatalog() {
@@ -637,46 +631,40 @@ function listEuEvBrands(variants, year) {
 
 function listEuEvModels(variants, brand, year) {
   const normalizedBrand = normalizeLookupText(brand);
-  const grouped = new Map();
+  const detailedModels = new Map();
 
   variants.forEach((variant) => {
     const yearMatches = variant.availableFromYear ? variant.availableFromYear <= year : true;
     const brandMatches = normalizeLookupText(variant.brand) === normalizedBrand;
     if (!yearMatches || !brandMatches) return;
 
-    const baseModel = deriveEuBaseModel(variant.brand, variant.title);
-    if (!baseModel) return;
+    const detailedModel = deriveEuBaseModel(variant.brand, variant.title);
+    if (!detailedModel) return;
 
-    const existing = grouped.get(baseModel) ?? {
-      model: baseModel,
+    const modelKey = normalizeLookupText(detailedModel);
+    if (!modelKey) return;
+
+    const existing = detailedModels.get(modelKey) ?? {
+      model: detailedModel,
       fuelType: "electric",
-      variantCount: 0,
-      averageEfficiencyKwh100km: 0,
-      pricedVariantCount: 0,
-      averagePriceEur: 0,
+      variantCount: 1,
+      averageEfficiencyKwh100km: variant.efficiencyKwh100km,
+      averagePriceEur: variant.priceEur ?? null,
     };
 
-    existing.variantCount += 1;
-    existing.averageEfficiencyKwh100km += variant.efficiencyKwh100km;
-    if (variant.priceEur) {
-      existing.pricedVariantCount += 1;
-      existing.averagePriceEur += variant.priceEur;
+    if (
+      existing.model !== detailedModel &&
+      detailedModel.length > existing.model.length
+    ) {
+      existing.model = detailedModel;
     }
-    grouped.set(baseModel, existing);
+    if (!existing.averagePriceEur && variant.priceEur) {
+      existing.averagePriceEur = variant.priceEur;
+    }
+    detailedModels.set(modelKey, existing);
   });
 
-  return [...grouped.values()]
-    .map((item) => ({
-      ...item,
-      averageEfficiencyKwh100km:
-        item.variantCount > 0
-          ? Math.round((item.averageEfficiencyKwh100km / item.variantCount) * 10) / 10
-          : 0,
-      averagePriceEur:
-        item.pricedVariantCount > 0
-          ? Math.round(item.averagePriceEur / item.pricedVariantCount)
-          : null,
-    }))
+  return [...detailedModels.values()]
     .sort((a, b) => a.model.localeCompare(b.model));
 }
 

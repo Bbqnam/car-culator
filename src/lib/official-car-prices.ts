@@ -4,6 +4,7 @@ export interface VerifiedOfficialPrice {
   sourceUrl: string;
   checkedAt: string;
   matchedModel: string;
+  matchConfidence: "exact" | "family";
 }
 
 interface OfficialCarPriceSource {
@@ -176,6 +177,10 @@ function getModelMatchScore(source: OfficialCarPriceSource, model: string): numb
   }, 0);
 }
 
+function getMatchConfidence(score: number): "exact" | "family" {
+  return score >= 1000 ? "exact" : "family";
+}
+
 export function findVerifiedOfficialPrice(
   brand?: string,
   model?: string,
@@ -216,5 +221,6 @@ export function findVerifiedOfficialPrice(
     sourceUrl: bestMatch.sourceUrl,
     checkedAt: bestMatch.checkedAt,
     matchedModel: bestMatch.model,
+    matchConfidence: getMatchConfidence(matches[0]?.score ?? 0),
   };
 }
