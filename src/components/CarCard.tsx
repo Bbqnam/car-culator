@@ -801,7 +801,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   const priceSourceMeta = getPriceSourceMeta(car.priceSource, t);
   const priceSourceCheckedAtLabel = formatIsoDate(car.priceSourceCheckedAt, locale);
   const marketSourceLink =
-    car.priceSource === "market_listings" && marketPriceQuery.data?.sourceUrl
+    car.priceSource === "market_listings" && marketPriceEstimate?.sourceUrl
       ? marketPriceQuery.data
       : null;
   const directSourceLink =
@@ -1144,8 +1144,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
   }, [car, exactEuEvModel, onChange]);
 
   useEffect(() => {
-    if (!car.isConfigured || !marketPriceQuery.data?.priceSek) return;
-    const marketEstimate = marketPriceQuery.data;
+    if (!car.isConfigured || !marketPriceEstimate?.priceSek) return;
+    const marketEstimate = marketPriceEstimate;
     if (!shouldPreferMarketPriceEstimate({
       currentPriceSource: car.priceSource,
       currentPurchasePrice: car.purchasePrice,
