@@ -218,12 +218,28 @@ interface CommercialContext {
   monthlyAdminFee: number;
 }
 
+export type RetailerSourceCategory = "marketplace" | "dealer_inventory" | "stored";
+export type RetailerLinkKind =
+  | "dealer_page"
+  | "dealer_inventory_search"
+  | "marketplace_listing"
+  | "marketplace_search"
+  | "stored_source_page";
+
 interface RetailerListingSource {
   brand: string;
   model: string;
   providerName: string;
   offerLabel: string;
   providerType?: "retailer" | "marketplace";
+  /**
+   * Distinguishes between aggregated marketplace pages, dealer-owned inventory
+   * pages, and manually verified stored source pages. Used to group cards in
+   * the UI honestly. Defaults to "stored" for legacy entries.
+   */
+  sourceCategory?: RetailerSourceCategory;
+  /** What this URL actually links to. Drives the CTA label. */
+  linkKind?: RetailerLinkKind;
   listingPrice: number;
   ctaUrl: string;
   checkedAt: string;
