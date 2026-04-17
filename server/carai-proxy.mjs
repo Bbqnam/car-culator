@@ -472,6 +472,224 @@ async function fetchBilwebMarketPrice(brand, model, year) {
   return null;
 }
 
+// ─── Market price provider registry ─────────────────────────────────────────
+//
+// Each provider must define:
+//   - id, label, category ("marketplace" | "dealer_inventory")
+//   - realisticInProduction: whether the adapter is expected to actually return
+//     candidates from a Vercel-hosted server (false = registered stub only)
+//   - fetchCandidates(brand, model, year) -> Promise<{candidates, attemptedUrls,
+//     rejectionReasons, notes}>
+//
+// `candidates` is an array of {priceSek, year, sourceUrl, modelTitle}. The
+// outer pipeline scores them per provider, picks the best per provider, and
+// then ranks across providers.
+
+const MARKET_PROVIDER_REGISTRY = [
+  {
+    id: "bilweb",
+    label: "Bilweb",
+    category: "marketplace",
+    realisticInProduction: true,
+    async fetchCandidates(brand, model, year) {
+      const filters = await fetchBilwebBrandFilters(brand);
+      if (!filters) {
+        return {
+          candidates: [],
+          attemptedUrls: [`${BILWEB_SEARCH_BASE_URL}/${slugifyMarketSegment(brand)}`],
+          rejectionReasons: ["Bilweb brand filter page returned no usable filter list"],
+        };
+      }
+
+      const selectedModelFilter = findBilwebModelFilter(filters.modelOptions, model);
+      if (!selectedModelFilter) {
+        return {
+          candidates: [],
+          attemptedUrls: [`${BILWEB_SEARCH_BASE_URL}/${slugifyMarketSegment(brand)}`],
+          rejectionReasons: [`Bilweb has no model filter matching "${model}"`],
+        };
+      }
+
+      const modelKeys = buildBilwebModelKeys(model);
+      const attemptedUrls = [
+        buildBilwebFilteredSearchUrl(filters.brandId, selectedModelFilter.id, year),
+        buildBilwebModelOnlySearchUrl(filters.brandId, selectedModelFilter.id),
+      ];
+      const rejectionReasons = [];
+      const collected = [];
+
+      for (const searchUrl of attemptedUrls) {
+        try {
+          const response = await fetch(searchUrl, {
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          });
+          if (!response.ok) {
+            rejectionReasons.push(`Bilweb search ${searchUrl} returned HTTP ${response.status}`);
+            continue;
+          }
+
+          const html = await response.text();
+          const listings = parseBilwebListings(html);
+          if (listings.length === 0) {
+            rejectionReasons.push(`Bilweb search ${searchUrl} returned 0 parsed listings`);
+            continue;
+          }
+
+          const matchingListings = listings.filter((listing) => listingMatchesBilwebModel(listing, modelKeys));
+          if (matchingListings.length === 0) {
+            rejectionReasons.push(`Bilweb search ${searchUrl} had ${listings.length} listings but none matched model keys`);
+            continue;
+          }
+
+          matchingListings.forEach((listing) => {
+            collected.push({
+              priceSek: listing.priceSek,
+              year: listing.year,
+              sourceUrl: searchUrl,
+              modelTitle: listing.modelName || listing.title,
+            });
+          });
+        } catch (error) {
+          rejectionReasons.push(
+            `Bilweb fetch failed for ${searchUrl}: ${error instanceof Error ? error.message : "unknown error"}`,
+          );
+        }
+      }
+
+      return { candidates: collected, attemptedUrls, rejectionReasons };
+    },
+  },
+  {
+    id: "blocket",
+    label: "Blocket",
+    category: "marketplace",
+    realisticInProduction: false,
+    async fetchCandidates() {
+      return {
+        candidates: [],
+        attemptedUrls: [],
+        rejectionReasons: [
+          "Blocket adapter registered but not implemented in production. Blocket's mobility listings are loaded client-side via a session-gated API and are not safely scrapeable from a Vercel server.",
+        ],
+        notes: "Reserved for future direct-feed or partner integration.",
+      };
+    },
+  },
+  {
+    id: "wayke",
+    label: "Wayke",
+    category: "marketplace",
+    realisticInProduction: false,
+    async fetchCandidates() {
+      return {
+        candidates: [],
+        attemptedUrls: [],
+        rejectionReasons: ["Wayke adapter registered but not implemented yet."],
+        notes: "Reserved for future Wayke search adapter.",
+      };
+    },
+  },
+  {
+    id: "bytbil",
+    label: "Bytbil",
+    category: "marketplace",
+    realisticInProduction: false,
+    async fetchCandidates() {
+      return {
+        candidates: [],
+        attemptedUrls: [],
+        rejectionReasons: ["Bytbil adapter registered but not implemented yet."],
+        notes: "Reserved for future Bytbil search adapter.",
+      };
+    },
+  },
+];
+
+function rankCandidatesForYear(candidates, year) {
+  const exactYear = candidates.filter((c) => c.year === year);
+  const nearbyYear = candidates.filter((c) => c.year !== year && Math.abs(c.year - year) <= 1);
+  const others = candidates.filter((c) => Math.abs(c.year - year) > 1);
+
+  if (exactYear.length > 0) return { matchType: "exact_year", listings: exactYear };
+  if (nearbyYear.length > 0) return { matchType: "nearby_year", listings: nearbyYear };
+  if (others.length > 0) return { matchType: "model_family", listings: others };
+  return { matchType: null, listings: [] };
+}
+
+const MATCH_TYPE_PRIORITY = { exact_year: 3, nearby_year: 2, model_family: 1 };
+
+function chooseBestProviderResult(perProviderResults) {
+  const usable = perProviderResults.filter((entry) => entry.estimate);
+  if (usable.length === 0) return null;
+
+  return usable.sort((a, b) => {
+    const aPriority = MATCH_TYPE_PRIORITY[a.estimate.matchType] ?? 0;
+    const bPriority = MATCH_TYPE_PRIORITY[b.estimate.matchType] ?? 0;
+    if (aPriority !== bPriority) return bPriority - aPriority;
+    if (a.estimate.sampleSize !== b.estimate.sampleSize) return b.estimate.sampleSize - a.estimate.sampleSize;
+    // Prefer dealer_inventory category over marketplace at equal strength.
+    const aCategoryRank = a.providerCategory === "dealer_inventory" ? 1 : 0;
+    const bCategoryRank = b.providerCategory === "dealer_inventory" ? 1 : 0;
+    return bCategoryRank - aCategoryRank;
+  })[0];
+}
+
+async function runMarketProvider(provider, brand, model, year) {
+  const startedAt = Date.now();
+  let outcome;
+  try {
+    outcome = await provider.fetchCandidates(brand, model, year);
+  } catch (error) {
+    return {
+      providerId: provider.id,
+      providerLabel: provider.label,
+      providerCategory: provider.category,
+      realisticInProduction: provider.realisticInProduction,
+      attemptedUrls: [],
+      candidateCount: 0,
+      rejectionReasons: [
+        `Provider ${provider.id} threw: ${error instanceof Error ? error.message : "unknown error"}`,
+      ],
+      estimate: null,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  const candidates = outcome.candidates ?? [];
+  const ranked = rankCandidatesForYear(candidates, year);
+  let estimate = null;
+
+  if (ranked.matchType && ranked.listings.length > 0) {
+    const priceSek = averagePrice(ranked.listings);
+    if (priceSek) {
+      // Pick a representative source URL: prefer one from the ranked listings.
+      const representativeUrl = ranked.listings[0]?.sourceUrl ?? outcome.attemptedUrls?.[0] ?? "";
+      estimate = {
+        priceSek,
+        sampleSize: ranked.listings.length,
+        provider: provider.id,
+        providerLabel: provider.label,
+        providerCategory: provider.category,
+        sourceUrl: representativeUrl,
+        matchType: ranked.matchType,
+      };
+    }
+  }
+
+  return {
+    providerId: provider.id,
+    providerLabel: provider.label,
+    providerCategory: provider.category,
+    realisticInProduction: provider.realisticInProduction,
+    attemptedUrls: outcome.attemptedUrls ?? [],
+    candidateCount: candidates.length,
+    rejectionReasons: outcome.rejectionReasons ?? [],
+    notes: outcome.notes,
+    estimate,
+    durationMs: Date.now() - startedAt,
+  };
+}
+
 async function handleMarketPrice(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const brand = url.searchParams.get("brand")?.trim() ?? "";
@@ -483,14 +701,57 @@ async function handleMarketPrice(req, res) {
     return;
   }
 
-  try {
-    const estimate = await fetchBilwebMarketPrice(brand, model, year);
-    sendJson(res, 200, { estimate });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to load Swedish market price listings.";
-    sendJson(res, 502, { error: message });
+  // Run providers sequentially so a slow/failing provider does not block the
+  // pipeline indefinitely, but does not stop subsequent providers either.
+  const providerResults = [];
+  for (const provider of MARKET_PROVIDER_REGISTRY) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await runMarketProvider(provider, brand, model, year);
+    providerResults.push(result);
   }
+
+  const best = chooseBestProviderResult(providerResults);
+  const estimate = best?.estimate ?? null;
+
+  const diagnostics = {
+    requestedAt: new Date().toISOString(),
+    query: { brand, model, year },
+    providersAttempted: providerResults.map((entry) => ({
+      provider: entry.providerId,
+      providerLabel: entry.providerLabel,
+      providerCategory: entry.providerCategory,
+      realisticInProduction: entry.realisticInProduction,
+      attemptedUrls: entry.attemptedUrls,
+      candidateCount: entry.candidateCount,
+      rejectionReasons: entry.rejectionReasons,
+      notes: entry.notes,
+      durationMs: entry.durationMs,
+      hadEstimate: Boolean(entry.estimate),
+      matchType: entry.estimate?.matchType ?? null,
+      sampleSize: entry.estimate?.sampleSize ?? 0,
+    })),
+    selectedProvider: best
+      ? {
+          provider: best.providerId,
+          providerLabel: best.providerLabel,
+          providerCategory: best.providerCategory,
+          matchType: best.estimate.matchType,
+          sampleSize: best.estimate.sampleSize,
+        }
+      : null,
+    fallbackReason: estimate
+      ? null
+      : providerResults.some((entry) => entry.realisticInProduction && entry.candidateCount === 0)
+        ? "No live candidate survived ranking. Real adapters returned 0 matches."
+        : "All registered providers are stubs / not implemented in production.",
+    coverageSummary: {
+      marketplaceProviders: providerResults.filter((e) => e.providerCategory === "marketplace").length,
+      dealerInventoryProviders: providerResults.filter((e) => e.providerCategory === "dealer_inventory").length,
+      providersWithEstimate: providerResults.filter((e) => Boolean(e.estimate)).length,
+    },
+  };
+
+  sendJson(res, 200, { estimate, diagnostics });
 }
 
 function parseEuEvPageCount(html) {
