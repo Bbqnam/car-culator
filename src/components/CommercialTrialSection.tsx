@@ -243,16 +243,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 )}
 
                 {offerView === "retailer" && (
-                  sortedRetailer.length > 0 ? (
-                    <RetailerList offers={sortedRetailer} currency={currency} />
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground">
-                      {t({
-                        en: "No verified dealer listings are loaded for this car yet. Placeholder dealer pricing has been removed.",
-                        sv: "Inga verifierade återförsäljarannonser är laddade för bilen ännu. Påhittad återförsäljarprissättning har tagits bort.",
-                      })}
-                    </div>
-                  )
+                  <PreOwnedSourcesGroup offers={sortedRetailer} currency={currency} />
                 )}
               </div>
             )}
