@@ -157,6 +157,10 @@ export interface RetailerOffer {
   offerLabel?: string;
   providerType: "retailer" | "marketplace";
   offerType: "retailer_listing";
+  /** Marketplace aggregator vs dealer-owned inventory vs verified stored page. */
+  sourceCategory: RetailerSourceCategory;
+  /** What the CTA URL actually opens; drives the CTA label so we never claim a marketplace search is a direct dealer purchase. */
+  linkKind: RetailerLinkKind;
   monthlyCost: number;
   upfrontCost: number;
   totalCost: number;
@@ -218,12 +222,28 @@ interface CommercialContext {
   monthlyAdminFee: number;
 }
 
+export type RetailerSourceCategory = "marketplace" | "dealer_inventory" | "stored";
+export type RetailerLinkKind =
+  | "dealer_page"
+  | "dealer_inventory_search"
+  | "marketplace_listing"
+  | "marketplace_search"
+  | "stored_source_page";
+
 interface RetailerListingSource {
   brand: string;
   model: string;
   providerName: string;
   offerLabel: string;
   providerType?: "retailer" | "marketplace";
+  /**
+   * Distinguishes between aggregated marketplace pages, dealer-owned inventory
+   * pages, and manually verified stored source pages. Used to group cards in
+   * the UI honestly. Defaults to "stored" for legacy entries.
+   */
+  sourceCategory?: RetailerSourceCategory;
+  /** What this URL actually links to. Drives the CTA label. */
+  linkKind?: RetailerLinkKind;
   listingPrice: number;
   ctaUrl: string;
   checkedAt: string;
@@ -545,6 +565,80 @@ const RETAILER_LISTING_SOURCES: RetailerListingSource[] = [
   },
 ];
 
+/**
+ * Bilia per-model dealer inventory search pages. Verified live in April 2026.
+ *
+ * These URLs follow the stable pattern `bilia.se/bilar/sok-bil/{brand}/{model}/`
+ * and resolve to Bilia-owned inventory listings (not aggregated marketplace
+ * results). They are classified as `dealer_inventory` so the UI can present
+ * them separately from marketplace overview pages and from manually verified
+ * stored stock-id pages.
+ *
+ * The listing price here is a representative anchor price; the actual stock
+ * varies daily on Bilia's side, so the CTA opens the live inventory search
+ * for that exact model rather than a single stock id.
+ */
+const BILIA_DEALER_INVENTORY_SEEDS: RetailerListingSource[] = [
+  // VW
+  ["Volkswagen", "Tiguan", "tiguan", 369000],
+  ["Volkswagen", "Golf", "golf", 199000],
+  ["Volkswagen", "Passat", "passat", 289000],
+  // Volvo
+  ["Volvo", "XC40", "xc40", 329000],
+  ["Volvo", "XC60", "xc60", 459000],
+  ["Volvo", "V60", "v60", 339000],
+  // Tesla
+  ["Tesla", "Model Y", "model-y", 419000],
+  ["Tesla", "Model 3", "model-3", 319000],
+  // Skoda
+  ["Skoda", "Octavia", "octavia", 249000],
+  ["Skoda", "Kodiaq", "kodiaq", 369000],
+  // Toyota
+  ["Toyota", "RAV4", "rav4", 379000],
+  ["Toyota", "Corolla", "corolla", 229000],
+].map(([brand, model, slug, listingPrice]) => ({
+  brand: brand as string,
+  model: model as string,
+  providerName: "Bilia",
+  offerLabel: `${model} - Bilia stock search`,
+  providerType: "retailer" as const,
+  sourceCategory: "dealer_inventory" as const,
+  linkKind: "dealer_inventory_search" as const,
+  // Anchor only for empty-state coverage; real on-page prices vary daily.
+  // Marked priceAnchorEligible: false so this never replaces the
+  // verified per-stock anchor used by `findVerifiedRetailerPrice`.
+  priceAnchorEligible: false,
+  listingPrice: listingPrice as number,
+  ctaUrl: `https://www.bilia.se/bilar/sok-bil/${(brand as string).toLowerCase()}/${slug as string}/`,
+  checkedAt: "2026-04-17",
+  condition: "Begagnad" as const,
+  dealerLocationSv: "Bilia, flera anlaggningar",
+  dealerLocationEn: "Bilia, multiple locations",
+  deliveryEstimateSv: "Live lager via Bilia.se",
+  deliveryEstimateEn: "Live inventory via Bilia.se",
+  warrantyInfoSv: "Kvalitetssakrad Bilia-bil enligt annons",
+  warrantyInfoEn: "Quality-checked Bilia car per listing",
+}));
+
+const ALL_RETAILER_SOURCES: RetailerListingSource[] = [
+  ...RETAILER_LISTING_SOURCES,
+  ...BILIA_DEALER_INVENTORY_SEEDS,
+];
+
+function resolveSourceCategory(source: RetailerListingSource): RetailerSourceCategory {
+  if (source.sourceCategory) return source.sourceCategory;
+  if ((source.providerType ?? "retailer") === "marketplace") return "marketplace";
+  return "stored";
+}
+
+function resolveLinkKind(source: RetailerListingSource): RetailerLinkKind {
+  if (source.linkKind) return source.linkKind;
+  const category = resolveSourceCategory(source);
+  if (category === "marketplace") return "marketplace_search";
+  if (category === "dealer_inventory") return "dealer_inventory_search";
+  return "stored_source_page";
+}
+
 function l(language: Language, en: string, sv: string): string {
   return language === "sv" ? sv : en;
 }
@@ -603,7 +697,7 @@ function matchesSourceModel(source: { brand: string; model: string }, brand?: st
 }
 
 export function findVerifiedRetailerPrice(brand?: string, model?: string): VerifiedRetailerPrice | null {
-  const matches = RETAILER_LISTING_SOURCES
+  const matches = ALL_RETAILER_SOURCES
     .filter((source) => source.priceAnchorEligible !== false)
     .filter((source) => matchesSourceModel(source, brand, model))
     .sort((left, right) => {
@@ -1003,7 +1097,7 @@ function buildRetailerOffers(
   const referenceBenchmark = loanBenchmarks[0];
   const referenceRatePercent = referenceBenchmark ? getRepresentativeNominalRate(referenceBenchmark) : 0;
 
-  return RETAILER_LISTING_SOURCES
+  return ALL_RETAILER_SOURCES
     .filter((source) => matchesSourceModel(source, car.brand, car.name))
     .map((source, index) => {
       const ownershipEstimate = estimateOwnershipCostForListing(
@@ -1011,6 +1105,44 @@ function buildRetailerOffers(
         context,
         referenceRatePercent,
       );
+      const sourceCategory = resolveSourceCategory(source);
+      const linkKind = resolveLinkKind(source);
+      const ctaLabel = (() => {
+        switch (linkKind) {
+          case "dealer_page":
+            return l(language, "Open dealer page", "Oppna handlarsida");
+          case "dealer_inventory_search":
+            return l(language, "Open dealer inventory", "Oppna handlarens lager");
+          case "marketplace_listing":
+            return l(language, "Open marketplace listing", "Oppna marknadsannons");
+          case "marketplace_search":
+            return l(language, "Open marketplace search", "Oppna marknadssokning");
+          case "stored_source_page":
+          default:
+            return l(language, "Open source page", "Oppna kallsida");
+        }
+      })();
+      const availabilityLabel = (() => {
+        if (sourceCategory === "dealer_inventory") {
+          return l(
+            language,
+            `Live dealer inventory checked ${source.checkedAt}. Ownership estimate uses an anchor price; actual stock prices vary.`,
+            `Live handlarlager kontrollerat ${source.checkedAt}. Agandekalkylen anvander ett ankarepris; faktiska lagerpriser varierar.`,
+          );
+        }
+        if (sourceCategory === "marketplace") {
+          return l(
+            language,
+            `Verified marketplace page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised market price.`,
+            `Verifierad marknadssida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonserat marknadspris.`,
+          );
+        }
+        return l(
+          language,
+          `Verified stored source page checked ${source.checkedAt}. Ownership estimate recalculated from the listing price.`,
+          `Verifierad lagrad kallsida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`,
+        );
+      })();
 
       return {
         id: `${slugify(source.providerName)}-${slugify(source.offerLabel)}-${index}`,
@@ -1018,7 +1150,9 @@ function buildRetailerOffers(
         providerName: source.providerName,
         offerLabel: source.offerLabel,
         providerType: source.providerType ?? "retailer",
-        offerType: "retailer_listing",
+        offerType: "retailer_listing" as const,
+        sourceCategory,
+        linkKind,
         monthlyCost: ownershipEstimate.monthlyCost,
         upfrontCost: ownershipEstimate.upfrontCost,
         totalCost: ownershipEstimate.totalCost,
@@ -1029,26 +1163,15 @@ function buildRetailerOffers(
         approvalSpeed: language === "sv" ? "Återförsäljare ringer upp" : "Dealer calls back",
         isSponsored: false,
         badge: index === 0 ? (language === "sv" ? "Bäst värde" : "Best value") : undefined,
-        ctaLabel:
-          (source.providerType ?? "retailer") === "marketplace"
-            ? l(language, "Open marketplace listing", "Oppna marknadsannons")
-            : l(language, "Open dealer listing", "Oppna annons"),
+        ctaLabel,
         ctaUrl: source.ctaUrl,
-        availability: l(
-          language,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verified marketplace page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised market price.`
-            : `Official dealer listing checked ${source.checkedAt}. Ownership estimate recalculated from the listing price.`,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verifierad marknadssida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonserat marknadspris.`
-            : `Officiell handlarannons kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`,
-        ),
-        sourceType: "manual",
+        availability: availabilityLabel,
+        sourceType: "manual" as const,
         condition: source.condition,
         deliveryEstimate: language === "sv" ? source.deliveryEstimateSv : source.deliveryEstimateEn,
         dealerLocation: language === "sv" ? source.dealerLocationSv : source.dealerLocationEn,
         warrantyInfo: language === "sv" ? source.warrantyInfoSv : source.warrantyInfoEn,
-      };
+      } satisfies RetailerOffer;
     });
 }
 

@@ -1,12 +1,54 @@
 import type { PriceSource } from "./car-types";
 
+export type MarketProviderCategory = "marketplace" | "dealer_inventory";
+
 export interface MarketPriceEstimate {
   priceSek: number;
   sampleSize: number;
   provider: string;
   providerLabel: string;
+  providerCategory?: MarketProviderCategory;
   sourceUrl: string;
   matchType: "exact_year" | "nearby_year" | "model_family";
+}
+
+export interface MarketPriceProviderAttempt {
+  provider: string;
+  providerLabel: string;
+  providerCategory: MarketProviderCategory;
+  realisticInProduction: boolean;
+  attemptedUrls: string[];
+  candidateCount: number;
+  rejectionReasons: string[];
+  notes?: string;
+  durationMs?: number;
+  hadEstimate: boolean;
+  matchType: "exact_year" | "nearby_year" | "model_family" | null;
+  sampleSize: number;
+}
+
+export interface MarketPriceDiagnostics {
+  requestedAt: string;
+  query: { brand: string; model: string; year: number };
+  providersAttempted: MarketPriceProviderAttempt[];
+  selectedProvider: {
+    provider: string;
+    providerLabel: string;
+    providerCategory: MarketProviderCategory;
+    matchType: MarketPriceEstimate["matchType"];
+    sampleSize: number;
+  } | null;
+  fallbackReason: string | null;
+  coverageSummary: {
+    marketplaceProviders: number;
+    dealerInventoryProviders: number;
+    providersWithEstimate: number;
+  };
+}
+
+export interface MarketPriceResponse {
+  estimate: MarketPriceEstimate | null;
+  diagnostics: MarketPriceDiagnostics | null;
 }
 
 export function isStrongMarketPriceEstimate(estimate: MarketPriceEstimate | null | undefined): boolean {
@@ -56,6 +98,15 @@ export async function fetchMarketPriceEstimate(
   model: string,
   year: number,
 ): Promise<MarketPriceEstimate | null> {
+  const result = await fetchMarketPriceResponse(brand, model, year);
+  return result.estimate;
+}
+
+export async function fetchMarketPriceResponse(
+  brand: string,
+  model: string,
+  year: number,
+): Promise<MarketPriceResponse> {
   const searchParams = new URLSearchParams({
     brand,
     model,
@@ -67,6 +118,9 @@ export async function fetchMarketPriceEstimate(
     throw new Error("Swedish market price lookup is temporarily unavailable.");
   }
 
-  const data = (await response.json()) as { estimate?: MarketPriceEstimate | null };
-  return data.estimate ?? null;
+  const data = (await response.json()) as Partial<MarketPriceResponse>;
+  return {
+    estimate: data.estimate ?? null,
+    diagnostics: data.diagnostics ?? null,
+  };
 }

@@ -243,16 +243,7 @@ export function CommercialTrialSection({ winner, currency }: CommercialTrialSect
                 )}
 
                 {offerView === "retailer" && (
-                  sortedRetailer.length > 0 ? (
-                    <RetailerList offers={sortedRetailer} currency={currency} />
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground">
-                      {t({
-                        en: "No verified dealer listings are loaded for this car yet. Placeholder dealer pricing has been removed.",
-                        sv: "Inga verifierade återförsäljarannonser är laddade för bilen ännu. Påhittad återförsäljarprissättning har tagits bort.",
-                      })}
-                    </div>
-                  )
+                  <PreOwnedSourcesGroup offers={sortedRetailer} currency={currency} />
                 )}
               </div>
             )}
@@ -480,6 +471,103 @@ function LeasingList({ offers, currency }: { offers: LeasingOffer[]; currency: C
         </article>
       ))}
     </div>
+  );
+}
+
+function PreOwnedSourcesGroup({ offers, currency }: { offers: RetailerOffer[]; currency: Currency }) {
+  const { t } = useI18n();
+
+  const marketplace = offers.filter((o) => o.sourceCategory === "marketplace");
+  const dealerInventory = offers.filter((o) => o.sourceCategory === "dealer_inventory");
+  const stored = offers.filter((o) => o.sourceCategory === "stored");
+
+  if (offers.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground space-y-1.5">
+        <p className="font-semibold text-foreground">
+          {t({ en: "No pre-owned sources matched this car", sv: "Inga begagnatkällor matchade denna bil" })}
+        </p>
+        <p>
+          {t({
+            en: "No stored dealer page, dealer inventory search, or marketplace overview is currently mapped to this exact brand and model. Live market lookups (Bilweb) may still appear as the purchase price source above.",
+            sv: "Ingen lagrad handlarsida, handlarlagersökning eller marknadsöversikt är för närvarande kopplad till exakt detta märke och modell. Live marknadsuppslag (Bilweb) kan fortfarande visas som priskälla ovan.",
+          })}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <PreOwnedGroupSection
+        title={t({ en: "Marketplace overviews", sv: "Marknadsöversikter" })}
+        description={t({
+          en: "Aggregated listings across multiple sellers (Blocket-style search pages).",
+          sv: "Aggregerade annonser från flera säljare (Blocket-liknande söksidor).",
+        })}
+        offers={marketplace}
+        currency={currency}
+        emptyHint={t({
+          en: "No marketplace overview page is stored for this model yet.",
+          sv: "Ingen marknadsöversiktssida är lagrad för denna modell ännu.",
+        })}
+      />
+      <PreOwnedGroupSection
+        title={t({ en: "Dealer inventory", sv: "Handlarens lager" })}
+        description={t({
+          en: "Live stock searches on dealer-owned websites (Bilia per-model).",
+          sv: "Live lagersökningar på handlarens egna sajter (Bilia per modell).",
+        })}
+        offers={dealerInventory}
+        currency={currency}
+        emptyHint={t({
+          en: "No dealer inventory adapter is mapped to this model yet.",
+          sv: "Ingen handlarlager-adapter är kopplad till denna modell ännu.",
+        })}
+      />
+      <PreOwnedGroupSection
+        title={t({ en: "Stored source pages", sv: "Lagrade källsidor" })}
+        description={t({
+          en: "Manually verified retailer or dealer pages stored in the repository.",
+          sv: "Manuellt verifierade handlar- eller återförsäljarsidor som lagras i repot.",
+        })}
+        offers={stored}
+        currency={currency}
+        emptyHint={t({
+          en: "No verified stored source page exists for this model yet.",
+          sv: "Ingen verifierad lagrad källsida finns för denna modell ännu.",
+        })}
+      />
+    </div>
+  );
+}
+
+function PreOwnedGroupSection({
+  title,
+  description,
+  offers,
+  currency,
+  emptyHint,
+}: {
+  title: string;
+  description: string;
+  offers: RetailerOffer[];
+  currency: Currency;
+  emptyHint: string;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h5 className="text-xs font-semibold text-foreground">{title}</h5>
+        <span className="text-[10px] text-muted-foreground">{offers.length}</span>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
+      {offers.length > 0 ? (
+        <RetailerList offers={offers} currency={currency} />
+      ) : (
+        <p className="text-[11px] text-muted-foreground italic px-1">{emptyHint}</p>
+      )}
+    </section>
   );
 }
 
