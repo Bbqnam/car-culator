@@ -697,7 +697,7 @@ function matchesSourceModel(source: { brand: string; model: string }, brand?: st
 }
 
 export function findVerifiedRetailerPrice(brand?: string, model?: string): VerifiedRetailerPrice | null {
-  const matches = RETAILER_LISTING_SOURCES
+  const matches = ALL_RETAILER_SOURCES
     .filter((source) => source.priceAnchorEligible !== false)
     .filter((source) => matchesSourceModel(source, brand, model))
     .sort((left, right) => {
