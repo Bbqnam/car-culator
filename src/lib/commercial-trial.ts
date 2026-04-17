@@ -561,6 +561,80 @@ const RETAILER_LISTING_SOURCES: RetailerListingSource[] = [
   },
 ];
 
+/**
+ * Bilia per-model dealer inventory search pages. Verified live in April 2026.
+ *
+ * These URLs follow the stable pattern `bilia.se/bilar/sok-bil/{brand}/{model}/`
+ * and resolve to Bilia-owned inventory listings (not aggregated marketplace
+ * results). They are classified as `dealer_inventory` so the UI can present
+ * them separately from marketplace overview pages and from manually verified
+ * stored stock-id pages.
+ *
+ * The listing price here is a representative anchor price; the actual stock
+ * varies daily on Bilia's side, so the CTA opens the live inventory search
+ * for that exact model rather than a single stock id.
+ */
+const BILIA_DEALER_INVENTORY_SEEDS: RetailerListingSource[] = [
+  // VW
+  ["Volkswagen", "Tiguan", "tiguan", 369000],
+  ["Volkswagen", "Golf", "golf", 199000],
+  ["Volkswagen", "Passat", "passat", 289000],
+  // Volvo
+  ["Volvo", "XC40", "xc40", 329000],
+  ["Volvo", "XC60", "xc60", 459000],
+  ["Volvo", "V60", "v60", 339000],
+  // Tesla
+  ["Tesla", "Model Y", "model-y", 419000],
+  ["Tesla", "Model 3", "model-3", 319000],
+  // Skoda
+  ["Skoda", "Octavia", "octavia", 249000],
+  ["Skoda", "Kodiaq", "kodiaq", 369000],
+  // Toyota
+  ["Toyota", "RAV4", "rav4", 379000],
+  ["Toyota", "Corolla", "corolla", 229000],
+].map(([brand, model, slug, listingPrice]) => ({
+  brand: brand as string,
+  model: model as string,
+  providerName: "Bilia",
+  offerLabel: `${model} - Bilia stock search`,
+  providerType: "retailer" as const,
+  sourceCategory: "dealer_inventory" as const,
+  linkKind: "dealer_inventory_search" as const,
+  // Anchor only for empty-state coverage; real on-page prices vary daily.
+  // Marked priceAnchorEligible: false so this never replaces the
+  // verified per-stock anchor used by `findVerifiedRetailerPrice`.
+  priceAnchorEligible: false,
+  listingPrice: listingPrice as number,
+  ctaUrl: `https://www.bilia.se/bilar/sok-bil/${(brand as string).toLowerCase()}/${slug as string}/`,
+  checkedAt: "2026-04-17",
+  condition: "Begagnad" as const,
+  dealerLocationSv: "Bilia, flera anlaggningar",
+  dealerLocationEn: "Bilia, multiple locations",
+  deliveryEstimateSv: "Live lager via Bilia.se",
+  deliveryEstimateEn: "Live inventory via Bilia.se",
+  warrantyInfoSv: "Kvalitetssakrad Bilia-bil enligt annons",
+  warrantyInfoEn: "Quality-checked Bilia car per listing",
+}));
+
+const ALL_RETAILER_SOURCES: RetailerListingSource[] = [
+  ...RETAILER_LISTING_SOURCES,
+  ...BILIA_DEALER_INVENTORY_SEEDS,
+];
+
+function resolveSourceCategory(source: RetailerListingSource): RetailerSourceCategory {
+  if (source.sourceCategory) return source.sourceCategory;
+  if ((source.providerType ?? "retailer") === "marketplace") return "marketplace";
+  return "stored";
+}
+
+function resolveLinkKind(source: RetailerListingSource): RetailerLinkKind {
+  if (source.linkKind) return source.linkKind;
+  const category = resolveSourceCategory(source);
+  if (category === "marketplace") return "marketplace_search";
+  if (category === "dealer_inventory") return "dealer_inventory_search";
+  return "stored_source_page";
+}
+
 function l(language: Language, en: string, sv: string): string {
   return language === "sv" ? sv : en;
 }
