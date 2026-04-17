@@ -362,11 +362,13 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
 
   const marketPriceQuery = useQuery({
     queryKey: ["market-price", car.brand, car.model, car.modelYear],
-    queryFn: () => fetchMarketPriceEstimate(car.brand, car.model, car.modelYear),
+    queryFn: () => fetchMarketPriceResponse(car.brand, car.model, car.modelYear),
     enabled: car.isConfigured && Boolean(car.brand) && Boolean(car.model),
     staleTime: 15 * 60 * 1000,
     retry: false,
   });
+  const marketPriceEstimate = marketPriceQuery.data?.estimate ?? null;
+  const marketPriceDiagnostics = marketPriceQuery.data?.diagnostics ?? null;
 
   const liveModels = liveModelsQuery.data ?? EMPTY_LIVE_MODELS;
   const liveOptions = liveOptionsQuery.data ?? EMPTY_LIVE_OPTIONS;
