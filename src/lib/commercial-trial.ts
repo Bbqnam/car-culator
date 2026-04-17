@@ -157,6 +157,10 @@ export interface RetailerOffer {
   offerLabel?: string;
   providerType: "retailer" | "marketplace";
   offerType: "retailer_listing";
+  /** Marketplace aggregator vs dealer-owned inventory vs verified stored page. */
+  sourceCategory: RetailerSourceCategory;
+  /** What the CTA URL actually opens; drives the CTA label so we never claim a marketplace search is a direct dealer purchase. */
+  linkKind: RetailerLinkKind;
   monthlyCost: number;
   upfrontCost: number;
   totalCost: number;
