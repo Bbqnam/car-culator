@@ -1097,7 +1097,7 @@ function buildRetailerOffers(
   const referenceBenchmark = loanBenchmarks[0];
   const referenceRatePercent = referenceBenchmark ? getRepresentativeNominalRate(referenceBenchmark) : 0;
 
-  return RETAILER_LISTING_SOURCES
+  return ALL_RETAILER_SOURCES
     .filter((source) => matchesSourceModel(source, car.brand, car.name))
     .map((source, index) => {
       const ownershipEstimate = estimateOwnershipCostForListing(
@@ -1105,6 +1105,44 @@ function buildRetailerOffers(
         context,
         referenceRatePercent,
       );
+      const sourceCategory = resolveSourceCategory(source);
+      const linkKind = resolveLinkKind(source);
+      const ctaLabel = (() => {
+        switch (linkKind) {
+          case "dealer_page":
+            return l(language, "Open dealer page", "Oppna handlarsida");
+          case "dealer_inventory_search":
+            return l(language, "Open dealer inventory", "Oppna handlarens lager");
+          case "marketplace_listing":
+            return l(language, "Open marketplace listing", "Oppna marknadsannons");
+          case "marketplace_search":
+            return l(language, "Open marketplace search", "Oppna marknadssokning");
+          case "stored_source_page":
+          default:
+            return l(language, "Open source page", "Oppna kallsida");
+        }
+      })();
+      const availabilityLabel = (() => {
+        if (sourceCategory === "dealer_inventory") {
+          return l(
+            language,
+            `Live dealer inventory checked ${source.checkedAt}. Ownership estimate uses an anchor price; actual stock prices vary.`,
+            `Live handlarlager kontrollerat ${source.checkedAt}. Agandekalkylen anvander ett ankarepris; faktiska lagerpriser varierar.`,
+          );
+        }
+        if (sourceCategory === "marketplace") {
+          return l(
+            language,
+            `Verified marketplace page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised market price.`,
+            `Verifierad marknadssida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonserat marknadspris.`,
+          );
+        }
+        return l(
+          language,
+          `Verified stored source page checked ${source.checkedAt}. Ownership estimate recalculated from the listing price.`,
+          `Verifierad lagrad kallsida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`,
+        );
+      })();
 
       return {
         id: `${slugify(source.providerName)}-${slugify(source.offerLabel)}-${index}`,
@@ -1112,7 +1150,9 @@ function buildRetailerOffers(
         providerName: source.providerName,
         offerLabel: source.offerLabel,
         providerType: source.providerType ?? "retailer",
-        offerType: "retailer_listing",
+        offerType: "retailer_listing" as const,
+        sourceCategory,
+        linkKind,
         monthlyCost: ownershipEstimate.monthlyCost,
         upfrontCost: ownershipEstimate.upfrontCost,
         totalCost: ownershipEstimate.totalCost,
@@ -1123,26 +1163,15 @@ function buildRetailerOffers(
         approvalSpeed: language === "sv" ? "Återförsäljare ringer upp" : "Dealer calls back",
         isSponsored: false,
         badge: index === 0 ? (language === "sv" ? "Bäst värde" : "Best value") : undefined,
-        ctaLabel:
-          (source.providerType ?? "retailer") === "marketplace"
-            ? l(language, "Open marketplace listing", "Oppna marknadsannons")
-            : l(language, "Open dealer listing", "Oppna annons"),
+        ctaLabel,
         ctaUrl: source.ctaUrl,
-        availability: l(
-          language,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verified marketplace page checked ${source.checkedAt}. Ownership estimate recalculated from the advertised market price.`
-            : `Official dealer listing checked ${source.checkedAt}. Ownership estimate recalculated from the listing price.`,
-          (source.providerType ?? "retailer") === "marketplace"
-            ? `Verifierad marknadssida kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonserat marknadspris.`
-            : `Officiell handlarannons kontrollerad ${source.checkedAt}. Agandekalkylen raknas om utifran annonspriset.`,
-        ),
-        sourceType: "manual",
+        availability: availabilityLabel,
+        sourceType: "manual" as const,
         condition: source.condition,
         deliveryEstimate: language === "sv" ? source.deliveryEstimateSv : source.deliveryEstimateEn,
         dealerLocation: language === "sv" ? source.dealerLocationSv : source.dealerLocationEn,
         warrantyInfo: language === "sv" ? source.warrantyInfoSv : source.warrantyInfoEn,
-      };
+      } satisfies RetailerOffer;
     });
 }
 
