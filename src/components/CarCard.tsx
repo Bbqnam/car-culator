@@ -45,6 +45,7 @@ import {
 } from "@/lib/financing-data";
 import {
   fetchMarketPriceEstimate,
+  fetchMarketPriceResponse,
   shouldPreferMarketPriceEstimate,
 } from "@/lib/market-price-api";
 import { findVerifiedRetailerPrice } from "@/lib/commercial-trial";
