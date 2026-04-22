@@ -413,11 +413,11 @@ export function CommercialOffersDialog({
                     ))
                   ) : (
                     <OfferEmptyState
-                      title={language === "sv" ? "Återförsäljarkort kräver verifierad lagerkälla" : "Dealer cards require a verified stock source"}
+                      title={language === "sv" ? "Ingen verifierad återförsäljarinventering hittades för bilen" : "No verified dealer inventory found for this car"}
                       description={
                         language === "sv"
-                          ? "Tidigare prototypkort med påhittade lagerpriser är borttagna. Den här fliken visar bara riktiga återförsäljarannonser när vi har en verifierad källa för just bilen."
-                          : "Earlier prototype cards with invented dealer pricing have been removed. This tab now only shows real retailer listings when we have a verified source for the exact car."
+                          ? "Den här fliken visar bara verifierade återförsäljarannonser för exakt bilmatch."
+                          : "This tab only shows verified dealer listings for the exact car."
                       }
                     />
                   )}

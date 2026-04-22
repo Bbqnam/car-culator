@@ -47,4 +47,14 @@ describe("official car prices", () => {
 
     expect(price).toBeNull();
   });
+
+  it("keeps Volvo EC40 aligned with the verified EX40 official price", () => {
+    const price = findVerifiedOfficialPrice("Volvo", "EC40", 2026, 2026);
+
+    expect(price).toMatchObject({
+      priceSek: 529900,
+      matchedModel: "EX40",
+      matchConfidence: "exact",
+    });
+  });
 });

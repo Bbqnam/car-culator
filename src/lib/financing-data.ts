@@ -383,11 +383,17 @@ const BRAND_LEVEL_LEASING_SUPPORT: LeasingAvailability[] = [
 ];
 
 function normalizeKey(value: string): string {
-  return value
+  const normalized = value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+  if (normalized === "ec40" || normalized === "volvoec40") {
+    return "ex40";
+  }
+
+  return normalized;
 }
 
 function matchesKey(candidate: ModelKey, brand: string, model?: string): boolean {

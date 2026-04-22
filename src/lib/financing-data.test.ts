@@ -80,4 +80,23 @@ describe("financing-data", () => {
     expect(benchmarks.some((item) => item.id === "seb-enkla-lanet")).toBe(true);
     expect(benchmarks.some((item) => item.id === "handelsbanken-privatlan")).toBe(true);
   });
+
+  it("keeps Volvo EC40 leasing defaults consistent with the verified EX40 offer", () => {
+    const availability = getLeasingAvailability("Volvo", "EC40", "2026-04-02");
+    const defaults = getSuggestedLeaseDefaults("Volvo", "EC40", "2026-04-02");
+
+    expect(availability).toMatchObject({
+      status: "available",
+      providerName: "Volvo Cars",
+      monthlyCostSek: 5195,
+    });
+    expect(defaults).toEqual({
+      monthlyLeaseCost: 5195,
+      downPayment: 0,
+      leaseDurationMonths: 36,
+      includedMileage: 10000,
+      excessMileageCostPerKm: 1.5,
+      endOfTermFee: 0,
+    });
+  });
 });

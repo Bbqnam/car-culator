@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { choosePreferredPriceCandidate, getAutomaticPriceSourcePriority, isFallbackPriceSource } from "./price-source";
+import {
+  canAutoApplyPriceSource,
+  choosePreferredPriceCandidate,
+  getAutomaticPriceSourcePriority,
+  isFallbackPriceSource,
+  resolveAutomaticPriceCandidates,
+} from "./price-source";
 
 describe("price-source priority", () => {
   it("keeps the requested automatic source order", () => {
@@ -38,5 +44,42 @@ describe("price-source priority", () => {
     expect(isFallbackPriceSource("historical_average")).toBe(true);
     expect(isFallbackPriceSource("retailer_listing")).toBe(false);
     expect(isFallbackPriceSource("market_listings")).toBe(false);
+  });
+
+  it("keeps low-confidence fallback prices from auto-applying over stronger sources", () => {
+    expect(canAutoApplyPriceSource("official_new")).toBe(true);
+    expect(canAutoApplyPriceSource("retailer_listing")).toBe(true);
+    expect(canAutoApplyPriceSource("market_listings")).toBe(true);
+    expect(canAutoApplyPriceSource("catalog_reference")).toBe(false);
+    expect(canAutoApplyPriceSource("historical_average")).toBe(false);
+  });
+
+  it("rejects an invalid marketplace teaser before ranking for Tiguan", () => {
+    const resolution = resolveAutomaticPriceCandidates([
+      { priceSek: 420000, priceSource: "catalog_reference", sourceLabel: "Fallback reference" },
+      { priceSek: 3495, priceSource: "market_listings", sourceLabel: "Bilweb", isValidated: false },
+    ]);
+
+    expect(resolution.selected).toMatchObject({
+      priceSek: 420000,
+      priceSource: "catalog_reference",
+    });
+    expect(resolution.rejected).toContainEqual(expect.objectContaining({
+      priceSource: "market_listings",
+      reason: "marketplace_unvalidated",
+    }));
+  });
+
+  it("keeps the official manufacturer price on top for Mercedes EQA when marketplace data also exists", () => {
+    const resolution = resolveAutomaticPriceCandidates([
+      { priceSek: 489900, priceSource: "official_new", sourceLabel: "Mercedes-Benz Sverige" },
+      { priceSek: 471000, priceSource: "market_listings", sourceLabel: "Bilweb", isValidated: true },
+      { priceSek: 455000, priceSource: "catalog_reference", sourceLabel: "Fallback reference" },
+    ]);
+
+    expect(resolution.selected).toMatchObject({
+      priceSek: 489900,
+      priceSource: "official_new",
+    });
   });
 });

@@ -146,11 +146,17 @@ const OFFICIAL_CAR_PRICE_SOURCES: OfficialCarPriceSource[] = [
 ];
 
 function normalizeSearchKey(value: string): string {
-  return value
+  const normalized = value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+  if (normalized === "ec40" || normalized === "volvoec40") {
+    return "ex40";
+  }
+
+  return normalized;
 }
 
 function getModelMatchScore(source: OfficialCarPriceSource, model: string): number {

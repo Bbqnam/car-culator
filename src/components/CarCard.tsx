@@ -51,7 +51,7 @@ import {
 } from "@/lib/market-price-api";
 import { findVerifiedRetailerPrice } from "@/lib/commercial-trial";
 import { findVerifiedOfficialPrice } from "@/lib/official-car-prices";
-import { choosePreferredPriceCandidate, type PriceCandidate } from "@/lib/price-source";
+import { resolveAutomaticPriceCandidates, type PriceCandidate } from "@/lib/price-source";
 import { estimateSwedishVehicleTax } from "@/lib/swedish-tax";
 import { Label } from "@/components/ui/label";
 import {
@@ -264,38 +264,23 @@ function describeMarketFallbackReason(
 ): string | null {
   if (!diagnostics) return null;
 
-  if (!estimate) {
-    if (diagnostics.fallbackReason === "no_adapter_match") {
-      return t({
-        en: "Live market lookup currently covers Bilweb only. No matching Bilweb adapter/filter path was available for this car.",
-        sv: "Live-marknadsuppslag täcker just nu bara Bilweb. Ingen matchande Bilweb-adapter eller filterväg fanns för bilen.",
-      });
-    }
-
+  if (diagnostics.rejectedSources.length > 0 || diagnostics.fallbackReason === "marketplace_data_rejected") {
     return t({
-      en: "No live Bilweb match was usable, so the app kept a stored fallback price. Blocket and direct dealer pages are not queried automatically here yet.",
-      sv: "Ingen live-match från Bilweb var användbar, så appen behöll ett lagrat fallback-pris. Blocket och direkta handlarsidor hämtas ännu inte automatiskt här.",
+      en: "Marketplace data found but not usable for price estimation.",
+      sv: "Marknadsdata hittades men kunde inte användas för prisuppskattning.",
     });
   }
 
-  if (currentPriceSource === "official_new") {
+  if (!estimate) return null;
+
+  if (currentPriceSource === "official_new" || currentPriceSource === "retailer_listing") {
     return t({
-      en: "A live Bilweb result was found, but a stored manufacturer price still outranks marketplace data.",
-      sv: "Ett live-resultat från Bilweb hittades, men ett lagrat tillverkarpris väger fortfarande tyngre än marknadsdata.",
+      en: "A validated marketplace estimate was found, but a higher-confidence price source is already in use.",
+      sv: "Ett validerat marknadsestimat hittades, men en priskälla med högre förtroende används redan.",
     });
   }
 
-  if (currentPriceSource === "retailer_listing") {
-    return t({
-      en: "A live Bilweb result was found, but a verified dealer-direct page still outranks marketplace data.",
-      sv: "Ett live-resultat från Bilweb hittades, men en verifierad direkt handlarsida väger fortfarande tyngre än marknadsdata.",
-    });
-  }
-
-  return t({
-    en: `A live Bilweb result was found (${estimate.matchType.replace("_", " ")}, ${estimate.sampleSize} listings), but it was not strong enough to replace the current source.`,
-    sv: `Ett live-resultat från Bilweb hittades (${estimate.matchType.replace("_", " ")}, ${estimate.sampleSize} annonser), men det var inte tillräckligt starkt för att ersätta nuvarande källa.`,
-  });
+  return null;
 }
 
 export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemove, onDuplicate }: CarCardProps) {
@@ -741,6 +726,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
           priceSource: "market_listings" as const,
           sourceLabel: marketEstimate.providerLabel,
           sourceUrl: marketEstimate.sourceUrl,
+          isValidated: true,
         };
       }
 
@@ -763,10 +749,10 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       marketCandidate,
       fallbackCandidate,
     ];
-    const selectedPriceCandidate =
+    const priceResolution =
       officialCandidate?.matchConfidence === "family" &&
       retailerCandidate?.matchConfidence === "exact"
-        ? choosePreferredPriceCandidate([
+        ? resolveAutomaticPriceCandidates([
             retailerCandidate,
             officialCandidate
               ? {
@@ -780,7 +766,8 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
             marketCandidate,
             fallbackCandidate,
           ])
-        : choosePreferredPriceCandidate(prioritizedCandidates);
+        : resolveAutomaticPriceCandidates(prioritizedCandidates);
+    const selectedPriceCandidate = priceResolution.selected;
 
     if (selectedPriceCandidate) {
       purchasePrice = selectedPriceCandidate.priceSek;
@@ -799,6 +786,7 @@ export function CarCard({ car, index, canRemove, canDuplicate, onChange, onRemov
       year: car.modelYear,
       selectedSource: priceSource,
       selectedPrice: purchasePrice,
+      rejectedCandidates: priceResolution.rejected,
       candidates: {
         official: officialCandidate,
         retailer: retailerCandidate,

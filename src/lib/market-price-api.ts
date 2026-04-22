@@ -16,7 +16,19 @@ export type MarketPriceAttemptStatus =
   | "filter_missing"
   | "no_listings"
   | "match_failed"
-  | "no_price";
+  | "no_price"
+  | "rejected";
+
+export interface MarketPriceRejectedSource {
+  provider: string;
+  strategy: string;
+  listingId: string;
+  title: string;
+  priceSek: number | null;
+  reason: string;
+  detail: string;
+  sourceUrl: string;
+}
 
 export interface MarketPriceAttempt {
   provider: string;
@@ -28,6 +40,8 @@ export interface MarketPriceAttempt {
   matchedCount?: number;
   sampleSize?: number;
   matchType?: MarketPriceEstimate["matchType"];
+  rejectedCount?: number;
+  rejectionReasons?: string[];
 }
 
 export interface MarketPriceDiagnostics {
@@ -44,6 +58,7 @@ export interface MarketPriceDiagnostics {
   selectedProvider?: string;
   selectedStrategy?: string;
   fallbackReason?: string;
+  rejectedSources: MarketPriceRejectedSource[];
   attempts: MarketPriceAttempt[];
 }
 
@@ -133,7 +148,12 @@ export async function fetchMarketPriceLookup(
   const data = (await response.json()) as MarketPriceLookupResult;
   return {
     estimate: data.estimate ?? null,
-    diagnostics: data.diagnostics,
+    diagnostics: data.diagnostics
+      ? {
+          ...data.diagnostics,
+          rejectedSources: data.diagnostics.rejectedSources ?? [],
+        }
+      : undefined,
   };
 }
 

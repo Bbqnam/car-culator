@@ -9,6 +9,7 @@ const MAX_REQUEST_SIZE_BYTES = 1_000_000;
 const MAX_HISTORY_MESSAGES = 10;
 const BILWEB_SEARCH_BASE_URL = "https://bilweb.se/sok";
 const BILWEB_FILTER_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const MIN_VALID_MARKETPLACE_PRICE_SEK = 20_000;
 const EU_EV_CATALOG_URL =
   "https://alternative-fuels-observatory.ec.europa.eu/markets-and-policy/market-and-consumer-insights/available-electric-vehicle-models";
 const EU_EV_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -69,6 +70,15 @@ let euEvCatalogCache = {
   variants: [],
 };
 const bilwebBrandFilterCache = new Map();
+const MARKETPLACE_REJECTION_PATTERNS = [
+  { pattern: /kr\s*\/\s*m[aå]n\b/i, reason: "monthly_teaser" },
+  { pattern: /\/\s*mo\b/i, reason: "monthly_teaser" },
+  { pattern: /\bleasing\b/i, reason: "leasing_teaser" },
+  { pattern: /\bfinancing\b/i, reason: "financing_teaser" },
+  { pattern: /\bbill[aå]n\b/i, reason: "financing_teaser" },
+  { pattern: /\bfrom\b/i, reason: "from_teaser" },
+  { pattern: /\bfr[aå]n\b/i, reason: "from_teaser" },
+];
 
 function setJsonHeaders(res) {
   const allowOrigin = process.env.CARAI_ALLOWED_ORIGIN ?? process.env.GROK_ALLOWED_ORIGIN ?? "*";
@@ -191,6 +201,109 @@ function parsePriceNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeMarketValidationText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getMarketplaceRejectionDetail(reason) {
+  switch (reason) {
+    case "monthly_teaser":
+      return "Marketplace price block looked like a monthly teaser instead of a sale price.";
+    case "leasing_teaser":
+      return "Marketplace candidate mentioned leasing terms instead of a sale price.";
+    case "financing_teaser":
+      return "Marketplace candidate mentioned financing terms instead of a sale price.";
+    case "from_teaser":
+      return "Marketplace candidate used a from/fran teaser instead of a clear sale price.";
+    case "price_below_threshold":
+      return `Marketplace candidate was below the minimum sale-price threshold of ${MIN_VALID_MARKETPLACE_PRICE_SEK} SEK.`;
+    case "ambiguous_price":
+      return "Marketplace candidate had an ambiguous price block.";
+    default:
+      return "Marketplace candidate had no clear sale price.";
+  }
+}
+
+function getMarketplacePriceMentions(value) {
+  return [...String(value || "").matchAll(/\d[\d\s]{3,}/g)]
+    .map((match) => parsePriceNumber(match[0]))
+    .filter((amount) => Number.isFinite(amount));
+}
+
+function extractBilwebPriceBlock(body) {
+  const priceClassIndex = body.search(/Card-mainPrice/i);
+  if (priceClassIndex === -1) {
+    return { priceText: "", priceContext: "" };
+  }
+
+  const priceBlockMatch = body.slice(priceClassIndex).match(/Card-mainPrice[^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
+  const contextHtml = body.slice(
+    Math.max(0, priceClassIndex - 120),
+    Math.min(body.length, priceClassIndex + 280),
+  );
+
+  return {
+    priceText: stripTags(priceBlockMatch?.[1] ?? ""),
+    priceContext: stripTags(contextHtml),
+  };
+}
+
+export function validateMarketplaceSalePriceCandidate({ priceText, priceContext, priceSek }) {
+  const normalizedPriceText = normalizeMarketValidationText(priceText);
+  const normalizedContext = normalizeMarketValidationText(`${priceText} ${priceContext}`);
+
+  if (!normalizedPriceText.trim()) {
+    return {
+      isValid: false,
+      reason: "no_clear_sale_price",
+      detail: getMarketplaceRejectionDetail("no_clear_sale_price"),
+    };
+  }
+
+  const priceMentions = [...new Set(getMarketplacePriceMentions(priceText))];
+  if (priceMentions.length > 1) {
+    return {
+      isValid: false,
+      reason: "ambiguous_price",
+      detail: getMarketplaceRejectionDetail("ambiguous_price"),
+    };
+  }
+
+  const rejectedPattern = MARKETPLACE_REJECTION_PATTERNS.find(({ pattern }) => pattern.test(normalizedContext));
+  if (rejectedPattern) {
+    return {
+      isValid: false,
+      reason: rejectedPattern.reason,
+      detail: getMarketplaceRejectionDetail(rejectedPattern.reason),
+    };
+  }
+
+  if (!Number.isFinite(priceSek)) {
+    return {
+      isValid: false,
+      reason: "no_clear_sale_price",
+      detail: getMarketplaceRejectionDetail("no_clear_sale_price"),
+    };
+  }
+
+  if (priceSek < MIN_VALID_MARKETPLACE_PRICE_SEK) {
+    return {
+      isValid: false,
+      reason: "price_below_threshold",
+      detail: getMarketplaceRejectionDetail("price_below_threshold"),
+    };
+  }
+
+  return {
+    isValid: true,
+    reason: null,
+    detail: null,
+  };
+}
+
 function slugifyMarketSegment(value) {
   return String(value || "")
     .normalize("NFKD")
@@ -241,7 +354,7 @@ function buildBilwebModelCandidates(model) {
   return candidates.slice(0, 6);
 }
 
-function parseBilwebListings(html) {
+export function parseBilwebListings(html) {
   const cards = [...html.matchAll(/<div class="Card " id="(\d+)">([\s\S]*?)<dl class="Card-carData">([\s\S]*?)<\/dl>/g)];
   const listings = [];
   const seenIds = new Set();
@@ -252,17 +365,22 @@ function parseBilwebListings(html) {
     seenIds.add(listingId);
 
     const body = match[0];
-    const priceMatch = body.match(/Card-mainPrice[^>]*>\s*([\d\s]+)\s*kr/i);
     const yearMatch = body.match(/<dt>År:<\/dt>\s*<dd>(\d{4})<\/dd>/i);
     const titleMatch = body.match(/go_to_detail"[^>]*>([^<]+)<\/a>/i);
     const detailUrlMatch = body.match(/<a class="go_to_detail" href="([^"]+)"/i);
     const modelNameMatch = body.match(/data-model-name="([^"]+)"/i);
-    const priceSek = parsePriceNumber(priceMatch?.[1] ?? "");
+    const { priceText, priceContext } = extractBilwebPriceBlock(body);
+    const priceSek = parsePriceNumber(priceText);
     const year = yearMatch ? Number(yearMatch[1]) : null;
     const detailUrl = detailUrlMatch?.[1]?.trim() ?? "";
     const modelName = stripTags(modelNameMatch?.[1] ?? "");
+    const validation = validateMarketplaceSalePriceCandidate({
+      priceText,
+      priceContext,
+      priceSek,
+    });
 
-    if (!priceSek || !year || !detailUrl) return;
+    if (!year || !detailUrl) return;
 
     listings.push({
       id: listingId,
@@ -271,6 +389,8 @@ function parseBilwebListings(html) {
       modelName,
       priceSek,
       year,
+      priceText,
+      validation,
     });
   });
 
@@ -408,7 +528,21 @@ function createMarketPriceDiagnostics(brand, model, year) {
       dealerPages: "not_implemented",
     },
     attempts: [],
+    rejectedSources: [],
   };
+}
+
+function addRejectedSources(diagnostics, rejectedSources) {
+  const existingKeys = new Set(
+    diagnostics.rejectedSources.map((entry) => `${entry.provider}:${entry.strategy}:${entry.listingId}:${entry.reason}`),
+  );
+
+  rejectedSources.forEach((entry) => {
+    const entryKey = `${entry.provider}:${entry.strategy}:${entry.listingId}:${entry.reason}`;
+    if (existingKeys.has(entryKey)) return;
+    existingKeys.add(entryKey);
+    diagnostics.rejectedSources.push(entry);
+  });
 }
 
 function getMarketMatchPriority(matchType) {
@@ -458,7 +592,7 @@ function buildBilwebBrandSearchUrl(brandId) {
   return `${BILWEB_SEARCH_BASE_URL}?${searchParams.toString()}`;
 }
 
-function evaluateBilwebListings(listings, model, modelKeys, year) {
+export function evaluateBilwebListings(listings, model, modelKeys, year) {
   if (listings.length === 0) {
     return {
       status: "no_listings",
@@ -489,6 +623,20 @@ function evaluateBilwebListings(listings, model, modelKeys, year) {
       : nearbyYearListings.length > 0
         ? nearbyYearListings
         : matchingListings;
+  const validListings = selectedListings.filter(
+    (listing) => listing.validation?.isValid && Number.isFinite(listing.priceSek),
+  );
+  const rejectedListings = selectedListings
+    .filter((listing) => !listing.validation?.isValid || !Number.isFinite(listing.priceSek))
+    .map((listing) => ({
+      provider: "Bilweb",
+      listingId: listing.id,
+      title: listing.title,
+      priceSek: Number.isFinite(listing.priceSek) ? listing.priceSek : null,
+      reason: listing.validation?.reason ?? "no_clear_sale_price",
+      detail: listing.validation?.detail ?? getMarketplaceRejectionDetail("no_clear_sale_price"),
+      sourceUrl: listing.detailUrl,
+    }));
   const matchType =
     exactModelListings.length === 0
       ? "model_family"
@@ -497,7 +645,21 @@ function evaluateBilwebListings(listings, model, modelKeys, year) {
         : nearbyYearListings.length > 0
           ? "nearby_year"
           : "model_family";
-  const priceSek = averagePrice(selectedListings);
+  const priceSek = averagePrice(validListings);
+
+  if (validListings.length === 0) {
+    return {
+      status: "rejected",
+      detail: "Bilweb matched the model, but every marketplace price candidate failed validation.",
+      listingCount: listings.length,
+      matchedCount: matchingListings.length,
+      sampleSize: 0,
+      matchType,
+      rejectedCount: rejectedListings.length,
+      rejectionReasons: [...new Set(rejectedListings.map((listing) => listing.reason))],
+      rejectedSources: rejectedListings,
+    };
+  }
 
   if (!priceSek) {
     return {
@@ -505,6 +667,9 @@ function evaluateBilwebListings(listings, model, modelKeys, year) {
       detail: "Bilweb returned matched listings, but no usable prices could be parsed.",
       listingCount: listings.length,
       matchedCount: matchingListings.length,
+      rejectedCount: rejectedListings.length,
+      rejectionReasons: [...new Set(rejectedListings.map((listing) => listing.reason))],
+      rejectedSources: rejectedListings,
     };
   }
 
@@ -512,11 +677,14 @@ function evaluateBilwebListings(listings, model, modelKeys, year) {
     status: "success",
     listingCount: listings.length,
     matchedCount: matchingListings.length,
-    sampleSize: selectedListings.length,
+    sampleSize: validListings.length,
     matchType,
+    rejectedCount: rejectedListings.length,
+    rejectionReasons: [...new Set(rejectedListings.map((listing) => listing.reason))],
+    rejectedSources: rejectedListings,
     estimate: {
       priceSek,
-      sampleSize: selectedListings.length,
+      sampleSize: validListings.length,
       provider: "bilweb",
       providerLabel: "Bilweb",
       matchType,
@@ -637,7 +805,17 @@ async function fetchBilwebMarketPrice(brand, model, year) {
         matchedCount: evaluation.matchedCount,
         sampleSize: evaluation.sampleSize,
         matchType: evaluation.matchType,
+        rejectedCount: evaluation.rejectedCount,
+        rejectionReasons: evaluation.rejectionReasons,
       });
+      addRejectedSources(
+        diagnostics,
+        (evaluation.rejectedSources ?? []).map((entry) => ({
+          ...entry,
+          provider: "Bilweb",
+          strategy: request.strategy,
+        })),
+      );
 
       if (evaluation.status === "success" && evaluation.estimate) {
         successfulCandidates.push({
@@ -659,9 +837,11 @@ async function fetchBilwebMarketPrice(brand, model, year) {
 
   const selectedCandidate = choosePreferredMarketCandidate(successfulCandidates);
   if (!selectedCandidate) {
-    diagnostics.fallbackReason = successfulCandidates.length === 0
-      ? "no_live_match"
-      : "no_usable_price";
+    diagnostics.fallbackReason = diagnostics.rejectedSources.length > 0
+      ? "marketplace_data_rejected"
+      : successfulCandidates.length === 0
+        ? "no_live_match"
+        : "no_usable_price";
     return { estimate: null, diagnostics };
   }
 
@@ -701,6 +881,7 @@ async function handleMarketPrice(req, res) {
       selectedStrategy: lookup.diagnostics?.selectedStrategy ?? null,
       fallbackReason: lookup.diagnostics?.fallbackReason ?? null,
       estimate: lookup.estimate,
+      rejectedSources: lookup.diagnostics?.rejectedSources ?? [],
       attempts: lookup.diagnostics?.attempts ?? [],
     }));
     sendJson(res, 200, lookup);
